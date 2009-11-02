@@ -45,8 +45,7 @@ class TestDAI {
         TestDAI( const FactorGraph &fg, const string &_name, const PropertySet &opts ) : obj(NULL), name(_name), err(), q(), logZ(0.0), maxdiff(0.0), time(0), iters(0U), has_logZ(false), has_maxdiff(false), has_iters(false) {
             double tic = toc();
             if( name == "LDPC" ) {
-                Prob zero(2,0.0);
-                zero[0] = 1.0;
+                Real zero[2] = {1.0, 0.0};
                 q.clear();
                 for( size_t i = 0; i < fg.nrVars(); i++ )
                     q.push_back( Factor(Var(i,2), zero) );

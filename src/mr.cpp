@@ -577,7 +577,7 @@ Factor MR::belief( const Var &n ) const {
     if( supported ) {
         size_t i = findVar( n );
 
-        Prob x(2);
+        Real x[2];
         x[0] = 0.5 - Mag[i] / 2.0;
         x[1] = 0.5 + Mag[i] / 2.0;
 

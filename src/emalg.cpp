@@ -70,7 +70,7 @@ Prob CondProbEstimation::estimate() {
             norm = 1.0 / norm;
         // normalize
         for( size_t i = parent; i < top; ++i )
-            _stats[i] *= norm;
+            _stats.set( i, _stats[i] * norm );
     }
     // reset _stats to _initial_stats
     Prob result = _stats;
@@ -199,7 +199,7 @@ void SharedParameters::collectSufficientStatistics( InfAlg &alg ) {
         Factor b = alg.belief(vs);
         Prob p( b.states(), 0.0 );
         for( size_t entry = 0; entry < b.states(); ++entry )
-            p[entry] = b[perm.convertLinearIndex(entry)];
+            p.set( entry, b[perm.convertLinearIndex(entry)] );
         _estimation->addSufficientStatistics( p );
     }
 }
@@ -213,7 +213,7 @@ void SharedParameters::setParameters( FactorGraph &fg ) {
 
         Factor f( vs, 0.0 );
         for( size_t entry = 0; entry < f.states(); ++entry )
-            f[perm.convertLinearIndex(entry)] = p[entry];
+            f.set( perm.convertLinearIndex(entry), p[entry] );
 
         fg.setFactor( i->first, f );
     }

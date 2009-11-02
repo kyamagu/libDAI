@@ -29,7 +29,7 @@ using namespace std;
 const char *BP::Name = "BP";
 
 
-#define DAI_BP_FAST 1
+#define DAI_BP_FAST 0
 
 
 void BP::setProperties( const PropertySet &opts ) {
@@ -177,9 +177,9 @@ void BP::calcNewMessage( size_t i, size_t _I ) {
                 const ind_t &ind = index(j, _I);
                 for( size_t r = 0; r < prod.size(); ++r )
                     if( props.logdomain )
-                        prod[r] += prod_j[ind[r]];
+                        prod.set( r, prod[r] + prod_j[ind[r]] );
                     else
-                        prod[r] *= prod_j[ind[r]];
+                        prod.set( r, prod[r] * prod_j[ind[r]] );
             }
         }
 
@@ -203,11 +203,11 @@ void BP::calcNewMessage( size_t i, size_t _I ) {
         const ind_t ind = index(i,_I);
         if( props.inference == Properties::InfType::SUMPROD )
             for( size_t r = 0; r < prod.size(); ++r )
-                marg[ind[r]] += prod[r];
+                marg.set( ind[r], marg[ind[r]] + prod[r] );
         else
             for( size_t r = 0; r < prod.size(); ++r )
                 if( prod[r] > marg[ind[r]] )
-                    marg[ind[r]] = prod[r];
+                    marg.set( ind[r], prod[r] );
         marg.normalize();
     }
 
@@ -373,9 +373,9 @@ void BP::calcBeliefF( size_t I, Prob &p ) const {
 
             for( size_t r = 0; r < prod.size(); ++r ) {
                 if( props.logdomain )
-                    prod[r] += prod_j[ind[r]];
+                    prod.set( r, prod[r] + prod_j[ind[r]] );
                 else
-                    prod[r] *= prod_j[ind[r]];
+                    prod.set( r, prod[r] * prod_j[ind[r]] );
             }
         }
     }

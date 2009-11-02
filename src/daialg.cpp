@@ -64,9 +64,9 @@ Factor calcMarginal( const InfAlg &obj, const VarSet &ns, bool reInit ) {
                 logZ0 = logZ;
 
         if( logZ == -INFINITY )
-            Pns[s] = 0;
+            Pns.set( s, 0 );
         else
-            Pns[s] = exp(logZ - logZ0); // subtract logZ0 to avoid very large numbers
+            Pns.set( s, exp(logZ - logZ0) ); // subtract logZ0 to avoid very large numbers
 
         // restore clamped factors
         clamped->restoreFactors( ns );
@@ -141,9 +141,9 @@ vector<Factor> calcPairBeliefs( const InfAlg & obj, const VarSet& ns, bool reIni
                     Factor b_k = clamped->belief(vns[k]);
                     for( size_t k_val = 0; k_val < vns[k].states(); k_val++ )
                         if( vns[j].label() < vns[k].label() )
-                            pairbeliefs[j * N + k][j_val + (k_val * vns[j].states())] = Z_xj * b_k[k_val];
+                            pairbeliefs[j * N + k].set( j_val + (k_val * vns[j].states()), Z_xj * b_k[k_val] );
                         else
-                            pairbeliefs[j * N + k][k_val + (j_val * vns[k].states())] = Z_xj * b_k[k_val];
+                            pairbeliefs[j * N + k].set( k_val + (j_val * vns[k].states()), Z_xj * b_k[k_val] );
                 }
 
             // restore clamped factors
@@ -238,7 +238,7 @@ vector<Factor> calcPairBeliefsNew( const InfAlg & obj, const VarSet& ns, bool re
 
                     // we assume that j.label() < k.label()
                     // i.e. we make an assumption here about the indexing
-                    pairbelief[j_val + (k_val * nj->states())] = Z_xj;
+                    pairbelief.set( j_val + (k_val * nj->states()), Z_xj );
 
                     // restore clamped factors
                     clamped->restoreFactors( ns );

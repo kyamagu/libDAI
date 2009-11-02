@@ -11,11 +11,11 @@
 
 
 /// \file
-/// \brief Defines TFactor<> and Factor classes which represent factors in probability distributions.
+/// \brief Defines TFactorSp<> class which represents sparse factors in probability distributions.
 
 
-#ifndef __defined_libdai_factor_h
-#define __defined_libdai_factor_h
+#ifndef __defined_libdai_factorsp_h
+#define __defined_libdai_factorsp_h
 
 
 #include <iostream>
@@ -25,7 +25,6 @@
 #include <dai/varset.h>
 #include <dai/index.h>
 #include <dai/util.h>
-#include <dai/factorsp.h>
 
 
 namespace dai {
@@ -39,14 +38,14 @@ namespace dai {
  *  a factor depending on the variables \f$\{x_l\}_{l\in L}\f$ is
  *  a function \f$f_L : \prod_{l\in L} X_l \to [0,\infty)\f$.
  *
- *  In libDAI, a factor is represented by a TFactor<T> object, which has two
+ *  In libDAI, a factor is represented by a TFactorSp<T> object, which has two
  *  components:
  *  \arg a VarSet, corresponding with the set of variables \f$\{x_l\}_{l\in L}\f$
  *  that the factor depends on;
- *  \arg a TProb, a vector containing the value of the factor for each possible
+ *  \arg a TProbSp, a vector containing the value of the factor for each possible
  *  joint state of the variables.
  *
- *  The factor values are stored in the entries of the TProb in a particular
+ *  The factor values are stored in the entries of the TProbSp in a particular
  *  ordering, which is defined by the one-to-one correspondence of a joint state
  *  in \f$\prod_{l\in L} X_l\f$ with a linear index in
  *  \f$\{0,1,\dots,\prod_{l\in L} S_l-1\}\f$ according to the mapping \f$\sigma\f$
@@ -56,27 +55,27 @@ namespace dai {
  *  \todo Define a better fileformat for .fg files (maybe using XML)?
  *  \todo Add support for sparse factors.
  */
-template <typename T> class TFactor {
+template <typename T> class TFactorSp {
     private:
         /// Stores the variables on which the factor depends
         VarSet      _vs;
         /// Stores the factor values
-        TProb<T>    _p;
+        TProbSp<T>    _p;
 
     public:
     /// \name Constructors and destructors
     //@{
         /// Constructs factor depending on no variables with value \a p
-        TFactor ( T p = 1 ) : _vs(), _p(1,p) {}
+        TFactorSp ( T p = 1 ) : _vs(), _p(1,p) {}
 
         /// Constructs factor depending on the variable \a v with uniform distribution
-        TFactor( const Var &v ) : _vs(v), _p(v.states()) {}
+        TFactorSp( const Var &v ) : _vs(v), _p(v.states()) {}
 
         /// Constructs factor depending on variables in \a vars with uniform distribution
-        TFactor( const VarSet& vars ) : _vs(vars), _p(_vs.nrStates()) {}
+        TFactorSp( const VarSet& vars ) : _vs(vars), _p(_vs.nrStates()) {}
 
         /// Constructs factor depending on variables in \a vars with all values set to \a p
-        TFactor( const VarSet& vars, T p ) : _vs(vars), _p(_vs.nrStates(),p) {}
+        TFactorSp( const VarSet& vars, T p ) : _vs(vars), _p(_vs.nrStates(),p) {}
 
         /// Constructs factor depending on variables in \a vars, copying the values from a std::vector<>
         /** \tparam S Type of values of \a x
@@ -84,7 +83,7 @@ template <typename T> class TFactor {
          *  \param x Vector with values to be copied.
          */
         template<typename S>
-        TFactor( const VarSet& vars, const std::vector<S> &x ) : _vs(vars), _p(x.begin(), x.begin() + _vs.nrStates(), _vs.nrStates()) {
+        TFactorSp( const VarSet& vars, const std::vector<S> &x ) : _vs(vars), _p(x.begin(), x.begin() + _vs.nrStates(), _vs.nrStates()) {
             DAI_ASSERT( x.size() == vars.nrStates() );
         }
 
@@ -92,15 +91,15 @@ template <typename T> class TFactor {
         /** \param vars contains the variables that the new factor should depend on.
          *  \param p Points to array of values to be added.
          */
-        TFactor( const VarSet& vars, const T* p ) : _vs(vars), _p(p, p + _vs.nrStates(), _vs.nrStates()) {}
+        TFactorSp( const VarSet& vars, const T* p ) : _vs(vars), _p(p, p + _vs.nrStates(), _vs.nrStates()) {}
 
         /// Constructs factor depending on variables in \a vars, copying the values from \a p
-        TFactor( const VarSet& vars, const TProb<T> &p ) : _vs(vars), _p(p) {
+        TFactorSp( const VarSet& vars, const TProbSp<T> &p ) : _vs(vars), _p(p) {
             DAI_DEBASSERT( _vs.nrStates() == _p.size() );
         }
 
         /// Constructs factor depending on variables in \a vars, permuting the values given in \a p accordingly
-        TFactor( const std::vector<Var> &vars, const std::vector<T> &p ) : _vs(vars.begin(), vars.end(), vars.size()), _p(p.size()) {
+        TFactorSp( const std::vector<Var> &vars, const std::vector<T> &p ) : _vs(vars.begin(), vars.end(), vars.size()), _p(p.size()) {
             Permute permindex(vars);
             for( size_t li = 0; li < p.size(); ++li )
                 _p.set( permindex.convertLinearIndex(li), p[li] );
@@ -119,10 +118,10 @@ template <typename T> class TFactor {
     /// \name Queries
     //@{
         /// Returns constant reference to value vector
-        const TProb<T>& p() const { return _p; }
+        const TProbSp<T>& p() const { return _p; }
 
         /// Returns reference to value vector
-        TProb<T>& p() { return _p; }
+        TProbSp<T>& p() { return _p; }
 
         /// Returns a copy of the \a i 'th entry of the value vector
         T operator[] (size_t i) const { return _p[i]; }
@@ -166,19 +165,19 @@ template <typename T> class TFactor {
     /// \name Unary transformations
     //@{
         /// Returns pointwise absolute value
-        TFactor<T> abs() const {
+        TFactorSp<T> abs() const {
             // Note: the alternative (shorter) way of implementing this,
-            //   return TFactor<T>( _vs, _p.abs() );
-            // is slower because it invokes the copy constructor of TProb<T>
-            TFactor<T> x;
+            //   return TFactorSp<T>( _vs, _p.abs() );
+            // is slower because it invokes the copy constructor of TProbSp<T>
+            TFactorSp<T> x;
             x._vs = _vs;
             x._p = _p.abs();
             return x;
         }
 
         /// Returns pointwise exponent
-        TFactor<T> exp() const {
-            TFactor<T> x;
+        TFactorSp<T> exp() const {
+            TFactorSp<T> x;
             x._vs = _vs;
             x._p = _p.exp();
             return x;
@@ -187,8 +186,8 @@ template <typename T> class TFactor {
         /// Returns pointwise logarithm
         /** If \a zero == \c true, uses <tt>log(0)==0</tt>; otherwise, <tt>log(0)==-Inf</tt>.
          */
-        TFactor<T> log(bool zero=false) const {
-            TFactor<T> x;
+        TFactorSp<T> log(bool zero=false) const {
+            TFactorSp<T> x;
             x._vs = _vs;
             x._p = _p.log(zero);
             return x;
@@ -197,16 +196,16 @@ template <typename T> class TFactor {
         /// Returns pointwise inverse
         /** If \a zero == \c true, uses <tt>1/0==0</tt>; otherwise, <tt>1/0==Inf</tt>.
          */
-        TFactor<T> inverse(bool zero=true) const {
-            TFactor<T> x;
+        TFactorSp<T> inverse(bool zero=true) const {
+            TFactorSp<T> x;
             x._vs = _vs;
             x._p = _p.inverse(zero);
             return x;
         }
 
         /// Returns normalized copy of \c *this, using the specified norm
-        TFactor<T> normalized( typename TProb<T>::NormType norm=TProb<T>::NORMPROB ) const {
-            TFactor<T> x;
+        TFactorSp<T> normalized( typename TProbSp<T>::NormType norm=TProbSp<T>::NORMPROB ) const {
+            TFactorSp<T> x;
             x._vs = _vs;
             x._p = _p.normalized( norm );
             return x;
@@ -216,89 +215,77 @@ template <typename T> class TFactor {
     /// \name Unary operations
     //@{
         /// Draws all values i.i.d. from a uniform distribution on [0,1)
-        TFactor<T> & randomize () { _p.randomize(); return *this; }
+        TFactorSp<T> & randomize () { _p.randomize(); return *this; }
 
         /// Sets all values to \f$1/n\f$ where \a n is the number of states
-        TFactor<T>& setUniform () { _p.setUniform(); return *this; }
+        TFactorSp<T>& setUniform () { _p.setUniform(); return *this; }
 
         /// Normalizes factor using the specified norm
-        T normalize( typename TProb<T>::NormType norm=TProb<T>::NORMPROB ) { return _p.normalize( norm ); }
+        T normalize( typename TProbSp<T>::NormType norm=TProbSp<T>::NORMPROB ) { return _p.normalize( norm ); }
     //@}
 
     /// \name Operations with scalars
     //@{
         /// Sets all values to \a x
-        TFactor<T> & fill (T x) { _p.fill( x ); return *this; }
-
-        // OBSOLETE
-        /// Sets values that are smaller (in absolute value) than \a epsilon to 0
-        /** \note Obsolete, to be removed soon
-         */
-        TFactor<T>& makeZero( T epsilon ) { _p.makeZero( epsilon ); return *this; }
-
-        // OBSOLETE
-        /// Sets values that are smaller than \a epsilon to \a epsilon
-        /** \note Obsolete, to be removed soon
-         */
-        TFactor<T>& makePositive( T epsilon ) { _p.makePositive( epsilon ); return *this; }
+        TFactorSp<T> & fill (T x) { _p.fill( x ); return *this; }
 
         /// Adds scalar \a x to each value
-        TFactor<T>& operator+= (T x) { _p += x; return *this; }
+        TFactorSp<T>& operator+= (T x) { _p += x; return *this; }
 
         /// Subtracts scalar \a x from each value
-        TFactor<T>& operator-= (T x) { _p -= x; return *this; }
+        TFactorSp<T>& operator-= (T x) { _p -= x; return *this; }
 
         /// Multiplies each value with scalar \a x
-        TFactor<T>& operator*= (T x) { _p *= x; return *this; }
+        TFactorSp<T>& operator*= (T x) { _p *= x; return *this; }
 
         /// Divides each entry by scalar \a x
-        TFactor<T>& operator/= (T x) { _p /= x; return *this; }
+        TFactorSp<T>& operator/= (T x) { _p /= x; return *this; }
 
         /// Raises values to the power \a x
-        TFactor<T>& operator^= (T x) { _p ^= x; return *this; }
+        TFactorSp<T>& operator^= (T x) { _p ^= x; return *this; }
     //@}
 
     /// \name Transformations with scalars
     //@{
         /// Returns sum of \c *this and scalar \a x
-        TFactor<T> operator+ (T x) const {
+        TFactorSp<T> operator+ (T x) const {
             // Note: the alternative (shorter) way of implementing this,
-            //   TFactor<T> result(*this);
+            //   TFactorSp<T> result(*this);
             //   result._p += x;
-            // is slower because it invokes the copy constructor of TFactor<T>
-            TFactor<T> result;
+            // is slower because it invokes the copy constructor of TFactorSp<T>
+            TFactorSp<T> result;
             result._vs = _vs;
             result._p = p() + x;
             return result;
         }
 
         /// Returns difference of \c *this and scalar \a x
-        TFactor<T> operator- (T x) const {
-            TFactor<T> result;
+        TFactorSp<T> operator- (T x) const {
+            TFactorSp<T> result;
             result._vs = _vs;
             result._p = p() - x;
             return result;
         }
 
         /// Returns product of \c *this with scalar \a x
-        TFactor<T> operator* (T x) const {
-            TFactor<T> result;
+        TFactorSp<T> operator* (T x) const {
+            TFactorSp<T> result;
             result._vs = _vs;
             result._p = p() * x;
             return result;
         }
 
         /// Returns quotient of \c *this with scalar \a x
-        TFactor<T> operator/ (T x) const {
-            TFactor<T> result;
+        TFactorSp<T> operator/ (T x) const {
+            TFactorSp<T> result;
             result._vs = _vs;
             result._p = p() / x;
             return result;
         }
 
         /// Returns \c *this raised to the power \a x
-        TFactor<T> operator^ (T x) const {
-            TFactor<T> result;
+        TFactorSp<T> operator^ (T x) const {
+            TFactorSp<T> result;
             result._vs = _vs;
             result._p = p() ^ x;
             return result;
@@ -312,11 +299,13 @@ template <typename T> class TFactor {
          *  \param g Right operand
          *  \param op Operation of type \a binOp
          */
-        template<typename binOp> TFactor<T>& binaryOp( const TFactor<T> &g, binOp op ) {
+        template<typename binOp> TFactorSp<T>& binaryOp( const TFactorSp<T> &g, binOp op ) {
             if( _vs == g._vs ) // optimize special case
                 _p.pwBinaryOp( g._p, op );
             else {
-                TFactor<T> f(*this); // make a copy
+                *this = pointwiseOp( *this, g, op );
+                // OPTIMIZE ME
+/*                TFactorSp<T> f(*this); // make a copy
                 _vs |= g._vs;
                 size_t N = _vs.nrStates();
 
@@ -326,7 +315,7 @@ template <typename T> class TFactor {
                 _p.p().clear();
                 _p.p().reserve( N );
                 for( size_t i = 0; i < N; i++, ++i_f, ++i_g )
-                    _p.p().push_back( op( f._p[i_f], g._p[i_g] ) );
+                    _p.p().push_back( op( f[i_f], g[i_g] ) );*/
             }
             return *this;
         }
@@ -336,28 +325,36 @@ template <typename T> class TFactor {
          *  \f$f : \prod_{l\in L} X_l \to [0,\infty)\f$ and \f$g : \prod_{m\in M} X_m \to [0,\infty)\f$, then
          *  \f[f+g : \prod_{l\in L\cup M} X_l \to [0,\infty) : x \mapsto f(x_L) + g(x_M).\f]
          */
-        TFactor<T>& operator+= (const TFactor<T>& g) { return binaryOp( g, std::plus<T>() ); }
+        TFactorSp<T>& operator+= (const TFactorSp<T>& g) { return binaryOp( g, std::plus<T>() ); }
 
         /// Subtracts \a g from \c *this
         /** The difference of two factors is defined as follows: if
          *  \f$f : \prod_{l\in L} X_l \to [0,\infty)\f$ and \f$g : \prod_{m\in M} X_m \to [0,\infty)\f$, then
          *  \f[f-g : \prod_{l\in L\cup M} X_l \to [0,\infty) : x \mapsto f(x_L) - g(x_M).\f]
          */
-        TFactor<T>& operator-= (const TFactor<T>& g) { return binaryOp( g, std::minus<T>() ); }
+        TFactorSp<T>& operator-= (const TFactorSp<T>& g) { return binaryOp( g, std::minus<T>() ); }
 
         /// Multiplies \c *this with \a g
         /** The product of two factors is defined as follows: if
          *  \f$f : \prod_{l\in L} X_l \to [0,\infty)\f$ and \f$g : \prod_{m\in M} X_m \to [0,\infty)\f$, then
          *  \f[fg : \prod_{l\in L\cup M} X_l \to [0,\infty) : x \mapsto f(x_L) g(x_M).\f]
          */
-        TFactor<T>& operator*= (const TFactor<T>& g) { return binaryOp( g, std::multiplies<T>() ); }
+        TFactorSp<T>& operator*= (const TFactorSp<T>& g) {
+            // Note that the following implementation is slow, because it doesn't exploit the special case of value 0
+            //   return binaryOp( g, std::multiplies<T>() );
+            if( _vs == g._vs ) // optimize special case
+                _p.pwBinaryOp( g._p, std::multiplies<T>() );
+            else
+                *this = pointwiseOp( *this, g, std::multiplies<T>(), p().def() == (T)0 && g.p().def() == (T)0 );
+            return *this;
+        }
 
         /// Divides \c *this by \a g (where division by zero yields zero)
         /** The quotient of two factors is defined as follows: if
          *  \f$f : \prod_{l\in L} X_l \to [0,\infty)\f$ and \f$g : \prod_{m\in M} X_m \to [0,\infty)\f$, then
          *  \f[\frac{f}{g} : \prod_{l\in L\cup M} X_l \to [0,\infty) : x \mapsto \frac{f(x_L)}{g(x_M)}.\f]
          */
-        TFactor<T>& operator/= (const TFactor<T>& g) { return binaryOp( g, fo_divides0<T>() ); }
+        TFactorSp<T>& operator/= (const TFactorSp<T>& g) { return binaryOp( g, fo_divides0<T>() ); }
     //@}
 
     /// \name Transformations with other factors
@@ -367,10 +364,12 @@ template <typename T> class TFactor {
          *  \param g Right operand
          *  \param op Operation of type \a binOp
          */
-        template<typename binOp> TFactor<T> binaryTr( const TFactor<T> &g, binOp op ) const {
+        template<typename binOp> TFactorSp<T> binaryTr( const TFactorSp<T> &g, binOp op ) const {
+            // OPTIMIZE ME
+            return pointwiseOp( *this, g, op );
             // Note that to prevent a copy to be made, it is crucial 
             // that the result is declared outside the if-else construct.
-            TFactor<T> result;
+/*            TFactorSp<T> result;
             if( _vs == g._vs ) { // optimize special case
                 result._vs = _vs;
                 result._p = _p.pwBinaryTr( g._p, op );
@@ -384,9 +383,9 @@ template <typename T> class TFactor {
                 result._p.p().clear();
                 result._p.p().reserve( N );
                 for( size_t i = 0; i < N; i++, ++i_f, ++i_g )
-                    result._p.p().push_back( op( _p[i_f], g._p[i_g] ) );
+                    result._p.p().push_back( op( _p[i_f], g[i_g] ) );
             }
-            return result;
+            return result;*/
         }
 
         /// Returns sum of \c *this and \a g
@@ -394,7 +393,7 @@ template <typename T> class TFactor {
          *  \f$f : \prod_{l\in L} X_l \to [0,\infty)\f$ and \f$g : \prod_{m\in M} X_m \to [0,\infty)\f$, then
          *  \f[f+g : \prod_{l\in L\cup M} X_l \to [0,\infty) : x \mapsto f(x_L) + g(x_M).\f]
          */
-        TFactor<T> operator+ (const TFactor<T>& g) const {
+        TFactorSp<T> operator+ (const TFactorSp<T>& g) const {
             return binaryTr(g,std::plus<T>());
         }
 
@@ -403,7 +402,7 @@ template <typename T> class TFactor {
          *  \f$f : \prod_{l\in L} X_l \to [0,\infty)\f$ and \f$g : \prod_{m\in M} X_m \to [0,\infty)\f$, then
          *  \f[f-g : \prod_{l\in L\cup M} X_l \to [0,\infty) : x \mapsto f(x_L) - g(x_M).\f]
          */
-        TFactor<T> operator- (const TFactor<T>& g) const {
+        TFactorSp<T> operator- (const TFactorSp<T>& g) const {
             return binaryTr(g,std::minus<T>());
         }
 
@@ -412,8 +411,8 @@ template <typename T> class TFactor {
          *  \f$f : \prod_{l\in L} X_l \to [0,\infty)\f$ and \f$g : \prod_{m\in M} X_m \to [0,\infty)\f$, then
          *  \f[fg : \prod_{l\in L\cup M} X_l \to [0,\infty) : x \mapsto f(x_L) g(x_M).\f]
          */
-        TFactor<T> operator* (const TFactor<T>& g) const {
-            return binaryTr(g,std::multiplies<T>());
+        TFactorSp<T> operator* (const TFactorSp<T>& g) const {
+            return pointwiseOp( *this, g, std::multiplies<T>(), p().def() == (T)0 && g.p().def() == (T)0 );
         }
 
         /// Returns quotient of \c *this by \a f (where division by zero yields zero)
@@ -421,7 +420,7 @@ template <typename T> class TFactor {
          *  \f$f : \prod_{l\in L} X_l \to [0,\infty)\f$ and \f$g : \prod_{m\in M} X_m \to [0,\infty)\f$, then
          *  \f[\frac{f}{g} : \prod_{l\in L\cup M} X_l \to [0,\infty) : x \mapsto \frac{f(x_L)}{g(x_M)}.\f]
          */
-        TFactor<T> operator/ (const TFactor<T>& g) const {
+        TFactorSp<T> operator/ (const TFactorSp<T>& g) const {
             return binaryTr(g,fo_divides0<T>());
         }
     //@}
@@ -440,7 +439,7 @@ template <typename T> class TFactor {
          *  returned corresponds with the factor \f$g : \prod_{l \in L \setminus M} X_l \to [0,\infty)\f$
          *  defined by \f$g(\{x_l\}_{l\in L \setminus M}) = f(\{x_l\}_{l\in L \setminus M}, \{s(x_m)\}_{m\in M})\f$.
          */
-        TFactor<T> slice( const VarSet& vars, size_t varsState ) const; 
+        TFactorSp<T> slice( const VarSet& vars, size_t varsState ) const;
 
         /// Embeds this factor in a larger VarSet
         /** \pre vars() should be a subset of \a vars 
@@ -448,73 +447,119 @@ template <typename T> class TFactor {
          *  If *this corresponds with \f$f : \prod_{l\in L} X_l \to [0,\infty)\f$ and \f$L \subset M\f$, then
          *  the embedded factor corresponds with \f$g : \prod_{m\in M} X_m \to [0,\infty) : x \mapsto f(x_L)\f$.
          */
-        TFactor<T> embed(const VarSet & vars) const {
+        TFactorSp<T> embed(const VarSet & vars) const {
             DAI_ASSERT( vars >> _vs );
             if( _vs == vars )
                 return *this;
             else
-                return (*this) * TFactor<T>(vars / _vs, (T)1);
+                return (*this) * TFactorSp<T>(vars / _vs, (T)1);
         }
 
         /// Returns marginal on \a vars, obtained by summing out all variables except those in \a vars, and normalizing the result if \a normed == \c true
-        TFactor<T> marginal(const VarSet &vars, bool normed=true) const;
+        TFactorSp<T> marginal(const VarSet &vars, bool normed=true) const;
 
         /// Returns max-marginal on \a vars, obtained by maximizing all variables except those in \a vars, and normalizing the result if \a normed == \c true
-        TFactor<T> maxMarginal(const VarSet &vars, bool normed=true) const;
+        TFactorSp<T> maxMarginal(const VarSet &vars, bool normed=true) const;
     //@}
 };
 
 
-template<typename T> TFactor<T> TFactor<T>::slice( const VarSet& vars, size_t varsState ) const {
+template<typename T> TFactorSp<T> TFactorSp<T>::slice( const VarSet& vars, size_t varsState ) const {
     DAI_ASSERT( vars << _vs );
     VarSet varsrem = _vs / vars;
-    TFactor<T> result( varsrem, T(0) );
 
+    TFactorSp<T> result( varsrem, p().def() );
+    for( typename TProbSp<T>::const_iterator it = p().begin(); it != p().end(); it++ ) {
+        State s( _vs, it->first );
+        size_t vars_s = s( vars );
+        if( vars_s == varsState )
+            result.set( s(varsrem), it->second );
+    }
+
+    /* SLOW BECAUSE IT ITERATES OVER ALL VALUES */
     // OPTIMIZE ME
+/*  TFactorSp<T> res( varsrem, T(0) );
     IndexFor i_vars (vars, _vs);
     IndexFor i_varsrem (varsrem, _vs);
     for( size_t i = 0; i < states(); i++, ++i_vars, ++i_varsrem )
         if( (size_t)i_vars == varsState )
-            result.set( i_varsrem, _p[i] );
+            res.set( i_varsrem, _p[i] );
+
+    if( !((result.p() <= res.p()) && (res.p() <= result.p())) ) {
+        std::cerr << result << std::endl;
+        std::cerr << res << std::endl;
+        DAI_ASSERT( ((result.p() <= res.p()) && (res.p() <= result.p())) );
+    }*/
 
     return result;
 }
 
 
-template<typename T> TFactor<T> TFactor<T>::marginal(const VarSet &vars, bool normed) const {
+template<typename T> TFactorSp<T> TFactorSp<T>::marginal(const VarSet &vars, bool normed) const {
     VarSet res_vars = vars & _vs;
 
-    TFactor<T> res( res_vars, 0.0 );
+    VarSet rem(_vs / res_vars);
+    TFactorSp<T> result( res_vars, rem.nrStates() * p().def() );
+    for( typename TProbSp<T>::const_iterator it = p().begin(); it != p().end(); it++ ) {
+        State s(_vs, it->first);
+        size_t res_vars_s = s( res_vars );
+        result.set( res_vars_s, result[res_vars_s] - p().def() + it->second );
+    }
 
+    /* SLOW BECAUSE IT ITERATES OVER ALL VALUES
+    TFactorSp<T> res( res_vars, 0.0 );
     IndexFor i_res( res_vars, _vs );
     for( size_t i = 0; i < _p.size(); i++, ++i_res )
         res.set( i_res, res[i_res] + _p[i] );
 
-    if( normed )
-        res.normalize( TProb<T>::NORMPROB );
+    if( !((result.p() <= res.p()) && (res.p() <= result.p())) ) {
+        std::cerr << result << std::endl;
+        std::cerr << res << std::endl;
+        DAI_ASSERT( ((result.p() <= res.p()) && (res.p() <= result.p())) );
+    }
+    */
 
-    return res;
+    if( normed )
+        result.normalize( TProbSp<T>::NORMPROB );
+
+    return result;
 }
 
 
-template<typename T> TFactor<T> TFactor<T>::maxMarginal(const VarSet &vars, bool normed) const {
+template<typename T> TFactorSp<T> TFactorSp<T>::maxMarginal(const VarSet &vars, bool normed) const {
     VarSet res_vars = vars & _vs;
 
-    TFactor<T> res( res_vars, 0.0 );
+    VarSet rem(_vs / res_vars);
+    TFactorSp<T> result( res_vars, p().def() );
+    for( typename TProbSp<T>::const_iterator it = p().begin(); it != p().end(); it++ ) {
+        State s( _vs, it->first );
+        size_t res_vars_s = s( res_vars );
+        if( it->second > result[res_vars_s] )
+            result.set( res_vars_s, it->second );
+    }
 
+    /* SLOW BECAUSE IT ITERATES OVER ALL VALUES */
+/*
+    TFactorSp<T> res( res_vars, 0.0 );
     IndexFor i_res( res_vars, _vs );
     for( size_t i = 0; i < _p.size(); i++, ++i_res )
         if( _p[i] > res._p[i_res] )
             res.set( i_res, _p[i] );
 
+    if( !((result.p() <= res.p()) && (res.p() <= result.p())) ) {
+        std::cerr << result << std::endl;
+        std::cerr << res << std::endl;
+        DAI_ASSERT( ((result.p() <= res.p()) && (res.p() <= result.p())) );
+    }
+*/
     if( normed )
-        res.normalize( TProb<T>::NORMPROB );
+        result.normalize( TProbSp<T>::NORMPROB );
 
-    return res;
+    return result;
 }
 
 
-template<typename T> T TFactor<T>::strength( const Var &i, const Var &j ) const {
+template<typename T> T TFactorSp<T>::strength( const Var &i, const Var &j ) const {
     DAI_DEBASSERT( _vs.contains( i ) );
     DAI_DEBASSERT( _vs.contains( j ) );
     DAI_DEBASSERT( i != j );
@@ -543,10 +588,94 @@ template<typename T> T TFactor<T>::strength( const Var &i, const Var &j ) const 
 }
 
 
-/// Writes a factor to an output stream
-/** \relates TFactor
+/// Apply binary operator pointwise on two factors
+/** \relates TFactorSp
+ *  \tparam binaryOp Type of function object that accepts two arguments of type \a T and outputs a type \a T
+ *  \param f Left operand
+ *  \param g Right operand
+ *  \param op Operation of type \a binaryOp
+ *  \param fast If true, supposes that the default value of \a f always gives the same result in op, and
+ *         similarly for the default value of \a g
  */
-template<typename T> std::ostream& operator<< (std::ostream& os, const TFactor<T>& f) {
+template<typename T, typename binaryOp> TFactorSp<T> pointwiseOp( const TFactorSp<T> &f, const TFactorSp<T> &g, binaryOp op, bool fast=false ) {
+    if( f.vars() == g.vars() ) { // optimizate special case
+        TFactorSp<T> result( f.vars() );
+        result.p() = f.p().pwBinaryTr( g.p(), op );
+        return result;
+    } else {
+        // Union of variables
+        VarSet un( f.vars() | g.vars() );
+        // Intersection of variables
+        VarSet is( f.vars() & g.vars() );
+        // Result factor
+        TFactorSp<T> result( un, op( f.p().def(), g.p().def() ) );
+
+        if( fast ) {
+            // For all non-default states of f and all non-default states of g
+            for( typename TProbSp<T>::const_iterator fit = f.p().begin(); fit != f.p().end(); fit++ ) {
+                // calculate state of f
+                State fs( f.vars(), fit->first );
+                for( typename TProbSp<T>::const_iterator git = g.p().begin(); git != g.p().end(); git++ ) {
+                    // calculate state of g
+                    State gs( g.vars(), git->first );
+                    // check whether these states are compatible
+                    bool compatible = true;
+                    for( typename VarSet::const_iterator v = is.begin(); v != is.end() && compatible; v++ )
+                        if( fs(*v) != gs(*v) )
+                            compatible = false;
+                    if( compatible ) {
+                        State fgs = fs;
+                        fgs.insert( gs.begin(), gs.end() );
+                        result.set( fgs(un), op( fit->second, git->second ) );
+                    }
+                }
+            }
+        } else {
+            // For all non-default states of f and all states of g
+            for( typename TProbSp<T>::const_iterator fit = f.p().begin(); fit != f.p().end(); fit++ ) {
+                State fs( f.vars(), fit->first );
+                for( State g_minus_f_s(g.vars() / f.vars()); g_minus_f_s.valid(); g_minus_f_s++ ) {
+                    State fgs = g_minus_f_s.get();
+                    fgs.insert( fs.begin(), fs.end() );
+                    result.set( fgs(un), op( fit->second, g[fgs(g.vars())] ) );
+                }
+            }
+            // For all states of f and all non-default states of g
+            for( typename TProbSp<T>::const_iterator git = g.p().begin(); git != g.p().end(); git++ ) {
+                State gs( g.vars(), git->first );
+                for( State f_minus_g_s(f.vars() / g.vars()); f_minus_g_s.valid(); f_minus_g_s++ ) {
+                    State fgs = f_minus_g_s.get();
+                    fgs.insert( gs.begin(), gs.end() );
+                    result.set( fgs(un), op( f[fgs(f.vars())], git->second ) );
+                }
+            }
+        }
+
+        /* SLOW BECAUSE IT ITERATES OVER ALL VALUES */
+/*        TFactorSp<T> resultold( un, op( f.p().def(), g.p().def() ) );
+        IndexFor i1(f.vars(), result.vars());
+        IndexFor i2(g.vars(), result.vars());
+
+        for( size_t i = 0; i < result.states(); i++, ++i1, ++i2 )
+            resultold.set(i, op( f[i1], g[i2] ));
+
+        if( !((result.p() <= resultold.p()) && (resultold.p() <= result.p())) ) {
+            std::cerr << result << std::endl;
+            std::cerr << resultold << std::endl;
+            DAI_ASSERT( ((result.p() <= resultold.p()) && (resultold.p() <= result.p())) );
+        }
+*/
+
+        return result;
+    }
+}
+
+
+/// Writes a factor to an output stream
+/** \relates TFactorSp
+ */
+template<typename T> std::ostream& operator<< (std::ostream& os, const TFactorSp<T>& f) {
+//    os << "(" << f.vars() << ", " << f.p() << ")";
     os << "(" << f.vars() << ", (";
     for( size_t i = 0; i < f.states(); i++ )
         os << (i == 0 ? "" : ", ") << f[i];
@@ -556,10 +685,10 @@ template<typename T> std::ostream& operator<< (std::ostream& os, const TFactor<T
 
 
 /// Returns distance between two factors \a f and \a g, according to the distance measure \a dt
-/** \relates TFactor
+/** \relates TFactorSp
  *  \pre f.vars() == g.vars()
  */
-template<typename T> T dist( const TFactor<T> &f, const TFactor<T> &g, typename TProb<T>::DistType dt ) {
+template<typename T> T dist( const TFactorSp<T> &f, const TFactorSp<T> &g, typename TProbSp<T>::DistType dt ) {
     if( f.vars().empty() || g.vars().empty() )
         return -1;
     else {
@@ -570,41 +699,36 @@ template<typename T> T dist( const TFactor<T> &f, const TFactor<T> &g, typename 
 
 
 /// Returns the pointwise maximum of two factors
-/** \relates TFactor
+/** \relates TFactorSp
  *  \pre f.vars() == g.vars()
  */
-template<typename T> TFactor<T> max( const TFactor<T> &f, const TFactor<T> &g ) {
+template<typename T> TFactorSp<T> max( const TFactorSp<T> &f, const TFactorSp<T> &g ) {
     DAI_ASSERT( f._vs == g._vs );
-    return TFactor<T>( f._vs, max( f.p(), g.p() ) );
+    return TFactorSp<T>( f._vs, max( f.p(), g.p() ) );
 }
 
 
 /// Returns the pointwise minimum of two factors
-/** \relates TFactor
+/** \relates TFactorSp
  *  \pre f.vars() == g.vars()
  */
-template<typename T> TFactor<T> min( const TFactor<T> &f, const TFactor<T> &g ) {
+template<typename T> TFactorSp<T> min( const TFactorSp<T> &f, const TFactorSp<T> &g ) {
     DAI_ASSERT( f._vs == g._vs );
-    return TFactor<T>( f._vs, min( f.p(), g.p() ) );
+    return TFactorSp<T>( f._vs, min( f.p(), g.p() ) );
 }
 
 
 /// Calculates the mutual information between the two variables that \a f depends on, under the distribution given by \a f
-/** \relates TFactor
+/** \relates TFactorSp
  *  \pre f.vars().size() == 2
  */
-template<typename T> T MutualInfo(const TFactor<T> &f) {
+template<typename T> T MutualInfo(const TFactorSp<T> &f) {
     DAI_ASSERT( f.vars().size() == 2 );
     VarSet::const_iterator it = f.vars().begin();
     Var i = *it; it++; Var j = *it;
-    TFactor<T> projection = f.marginal(i) * f.marginal(j);
-    return dist( f.normalized(), projection, TProb<T>::DISTKL );
+    TFactorSp<T> projection = f.marginal(i) * f.marginal(j);
+    return dist( f.normalized(), projection, TProbSp<T>::DISTKL );
 }
-
-
-/// Represents a factor with values of type dai::Real.
-typedef TFactorSp<Real> Factor;
-//typedef TFactor<Real> Factor;
 
 
 } // end of namespace dai

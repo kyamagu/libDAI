@@ -1,3 +1,8 @@
+* Redefined Prob as TProbSp<Real> and Factor as TFactorSp<Real>
+* Added classes TProbSp<T> and TFactorSp<T> for sparse factors,
+  implemented as a map<size_t,T>
+* Replaced T& TProb<T>::operator[] by TProb<T>::set()
+* Replaced T& TFactor<T>::operator[] by TFactor<T>::set()
 * Replaced constructor
     TFactor<T>::TFactor( const VarSet& vars, TIterator begin )
   by two constructors

@@ -64,7 +64,7 @@ Factor BinaryFactor( const Var &n1, const Var &n2, Real coupling ) {
 Factor RandomFactor( const VarSet &ns, Real beta ) {
     Factor fac( ns );
     for( size_t t = 0; t < fac.states(); t++ )
-        fac[t] = std::exp(rnd_stdnormal() * beta);
+        fac.set( t, std::exp(rnd_stdnormal() * beta) );
     return fac;
 }
 
@@ -73,7 +73,7 @@ Factor PottsFactor( const Var &n1, const Var &n2, Real beta ) {
     Factor fac( VarSet( n1, n2 ), 1.0 );
     DAI_ASSERT( n1.states() == n2.states() );
     for( size_t s = 0; s < n1.states(); s++ )
-        fac[ s * (n1.states() + 1) ] = std::exp(beta);
+        fac.set( s * (n1.states() + 1), std::exp(beta) );
     return fac;
 }
 
