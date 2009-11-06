@@ -23,6 +23,7 @@
 #include <algorithm>
 #include <numeric>
 #include <functional>
+#include <typeinfo>
 #include <dai/util.h>
 #include <dai/exceptions.h>
 
