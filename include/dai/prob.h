@@ -25,7 +25,8 @@
 #include <functional>
 #include <dai/util.h>
 #include <dai/exceptions.h>
-#include <dai/probsp.h>
+//#include <dai/probsp.h>
+#include <dai/probspv.h>
 
 
 namespace dai {
@@ -597,7 +598,7 @@ template<typename T> TProb<T> max( const TProb<T> &a, const TProb<T> &b ) {
 
 
 /// Represents a vector with entries of type dai::Real.
-typedef TProbSp<Real> Prob;
+typedef TProbSpV<Real> Prob;
 //typedef TProb<Real> Prob;
 
 

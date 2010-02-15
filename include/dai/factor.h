@@ -25,7 +25,8 @@
 #include <dai/varset.h>
 #include <dai/index.h>
 #include <dai/util.h>
-#include <dai/factorsp.h>
+//#include <dai/factorsp.h>
+#include <dai/factorspv.h>
 
 
 namespace dai {
@@ -603,7 +604,8 @@ template<typename T> T MutualInfo(const TFactor<T> &f) {
 
 
 /// Represents a factor with values of type dai::Real.
-typedef TFactorSp<Real> Factor;
+typedef TFactorSpV<Real> Factor;
+//typedef TFactorSp<Real> Factor;
 //typedef TFactor<Real> Factor;
 
 
