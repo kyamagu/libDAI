@@ -1,4 +1,6 @@
-* Redefined Prob as TProbSp<Real> and Factor as TFactorSp<Real>
+* Redefined Prob as TProbSpV<Real> and Factor as TFactorSpV<Real>
+* [Vicenç Gomez] Added classes TProbSpV<T> and TFactorSp<T> for
+  sparse factors, implemented as a vector<pair<size_t,T> >
 * Added classes TProbSp<T> and TFactorSp<T> for sparse factors,
   implemented as a map<size_t,T>
 * Replaced T& TProb<T>::operator[] by TProb<T>::set()

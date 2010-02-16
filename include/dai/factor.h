@@ -25,7 +25,7 @@
 #include <dai/varset.h>
 #include <dai/index.h>
 #include <dai/util.h>
-//#include <dai/factorsp.h>
+#include <dai/factorsp.h>
 #include <dai/factorspv.h>
 
 
