@@ -124,6 +124,16 @@ template<typename T> struct fo_KL : public std::binary_function<T, T, T> {
 };
 
 
+/// Function object useful for calculating the Hellinger distance
+template<typename T> struct fo_Hellinger : public std::binary_function<T, T, T> {
+    /// Returns (sqrt(\a p) - sqrt(\a q))^2
+    T operator()( const T &p, const T &q ) const {
+        T x = sqrt(p) - sqrt(q);
+        return x * x;
+    }
+};
+
+
 /// Function object that returns x to the power y
 template<typename T> struct fo_pow : public std::binary_function<T, T, T> {
     /// Returns (\a x ^ \a y)

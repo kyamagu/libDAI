@@ -4,12 +4,19 @@
 # 2, or (at your option) any later version. libDAI is distributed without any
 # warranty. See the file COPYING for more details.
 #
-# Copyright (C) 2006-2009  Joris Mooij  [joris dot mooij at libdai dot org]
+# Copyright (C) 2006-2010  Joris Mooij  [joris dot mooij at libdai dot org]
 # Copyright (C) 2006-2007  Radboud University Nijmegen, The Netherlands
 
 
+# Load the platform independent build configuration file
+include Makefile.ALL
+
 # Load the local configuration from Makefile.conf
 include Makefile.conf
+
+# Set version and date
+DAI_VERSION="git HEAD"
+DAI_DATE="February 11, 2010 - or later"
 
 # Directories of libDAI sources
 # Location libDAI headers
@@ -52,6 +59,14 @@ ifdef WITH_BP
   CCFLAGS:=$(CCFLAGS) -DDAI_WITH_BP
   OBJECTS:=$(OBJECTS) bp$(OE)
 endif
+ifdef WITH_FBP
+  CCFLAGS:=$(CCFLAGS) -DDAI_WITH_FBP
+  OBJECTS:=$(OBJECTS) fbp$(OE)
+endif
+ifdef WITH_TRWBP
+  CCFLAGS:=$(CCFLAGS) -DDAI_WITH_TRWBP
+  OBJECTS:=$(OBJECTS) trwbp$(OE)
+endif
 ifdef WITH_MF
   CCFLAGS:=$(CCFLAGS) -DDAI_WITH_MF
   OBJECTS:=$(OBJECTS) mf$(OE)
@@ -86,7 +101,7 @@ ifdef WITH_CBP
 endif
 
 # Define standard libDAI header dependencies
-HEADERS=$(INC)/bipgraph.h $(INC)/index.h $(INC)/var.h $(INC)/factor.h $(INC)/factorsp.h $(INC)/varset.h $(INC)/smallset.h $(INC)/fo.h $(INC)/prob.h $(INC)/probsp.h $(INC)/daialg.h $(INC)/properties.h $(INC)/alldai.h $(INC)/enum.h $(INC)/exceptions.h $(INC)/util.h
+HEADERS=$(INC)/bipgraph.h $(INC)/graph.h $(INC)/index.h $(INC)/var.h $(INC)/factor.h $(INC)/factorsp.h $(INC)/factorspv.h $(INC)/varset.h $(INC)/smallset.h $(INC)/fo.h $(INC)/prob.h $(INC)/probsp.h $(INC)/probspv.h $(INC)/daialg.h $(INC)/properties.h $(INC)/alldai.h $(INC)/enum.h $(INC)/exceptions.h $(INC)/util.h
 
 # Setup final command for C++ compiler and MEX
 ifneq ($(OS),WINDOWS)
@@ -103,7 +118,7 @@ MEX:=$(MEX) $(CCLIB) $(CCINC) $(MEXFLAGS)
 
 all : $(TARGETS)
 
-examples : examples/example$(EE) examples/example_bipgraph$(EE) examples/example_varset$(EE) examples/example_permute$(EE) examples/example_sprinkler$(EE)
+examples : examples/example$(EE) examples/example_bipgraph$(EE) examples/example_varset$(EE) examples/example_permute$(EE) examples/example_sprinkler$(EE) examples/example_sprinkler_gibbs$(EE) examples/example_sprinkler_em$(EE)
 
 matlabs : matlab/dai$(ME) matlab/dai_readfg$(ME) matlab/dai_writefg$(ME) matlab/dai_potstrength$(ME)
 
@@ -120,6 +135,12 @@ lib: $(LIB)/libdai$(LE)
 bipgraph$(OE) : $(SRC)/bipgraph.cpp $(HEADERS)
 	$(CC) -c $(SRC)/bipgraph.cpp
 
+graph$(OE) : $(SRC)/graph.cpp $(HEADERS)
+	$(CC) -c $(SRC)/graph.cpp
+
+varset$(OE) : $(SRC/varset.cpp $(HEADERS)
+	$(CC) -c $(SRC)/varset.cpp
+
 daialg$(OE) : $(SRC)/daialg.cpp $(HEADERS)
 	$(CC) -c $(SRC)/daialg.cpp
 
@@ -128,6 +149,12 @@ exactinf$(OE) : $(SRC)/exactinf.cpp $(INC)/exactinf.h $(HEADERS)
 
 bp$(OE) : $(SRC)/bp.cpp $(INC)/bp.h $(HEADERS)
 	$(CC) -c $(SRC)/bp.cpp
+
+fbp$(OE) : $(SRC)/fbp.cpp $(INC)/fbp.h $(HEADERS)
+	$(CC) -c $(SRC)/fbp.cpp
+
+trwbp$(OE) : $(SRC)/trwbp.cpp $(INC)/trwbp.h $(HEADERS)
+	$(CC) -c $(SRC)/trwbp.cpp
 
 bp_dual$(OE) : $(SRC)/bp_dual.cpp $(INC)/bp_dual.h $(HEADERS)
 	$(CC) -c $(SRC)/bp_dual.cpp
@@ -143,6 +170,9 @@ lc$(OE) : $(SRC)/lc.cpp $(INC)/lc.h $(HEADERS)
 
 mf$(OE) : $(SRC)/mf.cpp $(INC)/mf.h $(HEADERS)
 	$(CC) -c $(SRC)/mf.cpp
+
+factor$(OE) : $(SRC)/factor.cpp $(INC)/factor.h $(HEADERS)
+	$(CC) -c $(SRC)/factor.cpp
 
 factorgraph$(OE) : $(SRC)/factorgraph.cpp $(INC)/factorgraph.h $(HEADERS)
 	$(CC) -c $(SRC)/factorgraph.cpp
@@ -208,6 +238,12 @@ examples/example_permute$(EE) : examples/example_permute.cpp $(HEADERS) $(LIB)/l
 examples/example_sprinkler$(EE) : examples/example_sprinkler.cpp $(HEADERS) $(LIB)/libdai$(LE)
 	$(CC) $(CCO)examples/example_sprinkler$(EE) examples/example_sprinkler.cpp $(LIBS)
 
+examples/example_sprinkler_gibbs$(EE) : examples/example_sprinkler_gibbs.cpp $(HEADERS) $(LIB)/libdai$(LE)
+	$(CC) $(CCO)examples/example_sprinkler_gibbs$(EE) examples/example_sprinkler_gibbs.cpp $(LIBS)
+
+examples/example_sprinkler_em$(EE) : examples/example_sprinkler_em.cpp $(HEADERS) $(LIB)/libdai$(LE)
+	$(CC) $(CCO)examples/example_sprinkler_em$(EE) examples/example_sprinkler_em.cpp $(LIBS)
+
 
 # TESTS
 ########
@@ -227,11 +263,11 @@ tests/testbbp$(EE) : tests/testbbp.cpp $(HEADERS) $(LIB)/libdai$(LE)
 matlab/dai$(ME) : $(SRC)/matlab/dai.cpp $(HEADERS) matlab$(OE) $(LIB)/libdai$(LE)
 	$(MEX) -o matlab/dai $(SRC)/matlab/dai.cpp matlab$(OE) $(LIB)/libdai$(LE)
 
-matlab/dai_readfg$(ME) : $(SRC)/matlab/dai_readfg.cpp $(HEADERS) factorgraph$(OE) matlab$(OE) exceptions$(OE)
-	$(MEX) -o matlab/dai_readfg $(SRC)/matlab/dai_readfg.cpp factorgraph$(OE) matlab$(OE) exceptions$(OE)
+matlab/dai_readfg$(ME) : $(SRC)/matlab/dai_readfg.cpp $(HEADERS) factorgraph$(OE) matlab$(OE) exceptions$(OE) bipgraph$(OE)
+	$(MEX) -o matlab/dai_readfg $(SRC)/matlab/dai_readfg.cpp factorgraph$(OE) matlab$(OE) exceptions$(OE) bipgraph$(OE)
 
-matlab/dai_writefg$(ME) : $(SRC)/matlab/dai_writefg.cpp $(HEADERS) factorgraph$(OE) matlab$(OE) exceptions$(OE)
-	$(MEX) -o matlab/dai_writefg $(SRC)/matlab/dai_writefg.cpp factorgraph$(OE) matlab$(OE) exceptions$(OE)
+matlab/dai_writefg$(ME) : $(SRC)/matlab/dai_writefg.cpp $(HEADERS) factorgraph$(OE) matlab$(OE) exceptions$(OE) bipgraph$(OE)
+	$(MEX) -o matlab/dai_writefg $(SRC)/matlab/dai_writefg.cpp factorgraph$(OE) matlab$(OE) exceptions$(OE) bipgraph$(OE)
 
 matlab/dai_potstrength$(ME) : $(SRC)/matlab/dai_potstrength.cpp $(HEADERS) matlab$(OE) exceptions$(OE)
 	$(MEX) -o matlab/dai_potstrength $(SRC)/matlab/dai_potstrength.cpp matlab$(OE) exceptions$(OE)
@@ -256,14 +292,16 @@ utils/fginfo$(EE) : utils/fginfo.cpp $(HEADERS) $(LIB)/libdai$(LE)
 # LIBRARY
 ##########
 
+OBJECTS:=bipgraph$(OE) graph$(OE) varset$(OE) daialg$(OE) alldai$(OE) clustergraph$(OE) factor$(OE) factorgraph$(OE) properties$(OE) regiongraph$(OE) util$(OE) weightedgraph$(OE) exceptions$(OE) $(OBJECTS) 
+
 ifneq ($(OS),WINDOWS)
-$(LIB)/libdai$(LE) : bipgraph$(OE) daialg$(OE) alldai$(OE) clustergraph$(OE) factorgraph$(OE) properties$(OE) regiongraph$(OE) util$(OE) weightedgraph$(OE) exceptions$(OE) $(OBJECTS)
+$(LIB)/libdai$(LE) : $(OBJECTS)
 	-mkdir -p lib
-	ar rcus $(LIB)/libdai$(LE) bipgraph$(OE) daialg$(OE) alldai$(OE) clustergraph$(OE) factorgraph$(OE) properties$(OE) regiongraph$(OE) util$(OE) weightedgraph$(OE) exceptions$(OE) $(OBJECTS)
+	ar rcus $(LIB)/libdai$(LE) $(OBJECTS)
 else
-$(LIB)/libdai$(LE) : bipgraph$(OE) daialg$(OE) alldai$(OE) clustergraph$(OE) factorgraph$(OE) properties$(OE) regiongraph$(OE) util$(OE) weightedgraph$(OE) exceptions$(OE) $(OBJECTS)
+$(LIB)/libdai$(LE) : $(OBJECTS)
 	-mkdir lib
-	lib /out:$(LIB)/libdai$(LE) bipgraph$(OE) daialg$(OE) alldai$(OE) clustergraph$(OE) factorgraph$(OE) properties$(OE) regiongraph$(OE) util$(OE) weightedgraph$(OE) exceptions$(OE) $(OBJECTS)
+	lib /out:$(LIB)/libdai$(LE) $(OBJECTS)
 endif
 
 
@@ -293,7 +331,10 @@ endif
 doc : $(INC)/*.h $(SRC)/*.cpp examples/*.cpp doxygen.conf
 	doxygen doxygen.conf
 
-TAGS:
+README : doc scripts/makeREADME
+	DAI_VERSION=$(DAI_VERSION) DAI_DATE=$(DAI_DATE) scripts/makeREADME
+
+TAGS :
 	etags src/*.cpp include/dai/*.h tests/*.cpp utils/*.cpp
 	ctags src/*.cpp include/dai/*.h tests/*.cpp utils/*.cpp
 
@@ -306,7 +347,7 @@ ifneq ($(OS),WINDOWS)
 clean :
 	-rm *$(OE)
 	-rm matlab/*$(ME)
-	-rm examples/example$(EE) examples/example_bipgraph$(EE) examples/example_varset$(EE) examples/example_permute$(EE) examples/example_sprinkler$(EE)
+	-rm examples/example$(EE) examples/example_bipgraph$(EE) examples/example_varset$(EE) examples/example_permute$(EE) examples/example_sprinkler$(EE) examples/example_sprinkler_gibbs$(EE) examples/example_sprinkler_em$(EE)
 	-rm tests/testdai$(EE) tests/testem/testem$(EE) tests/testbbp$(EE)
 	-rm utils/fg2dot$(EE) utils/createfg$(EE) utils/fginfo$(EE)
 	-rm -R doc
@@ -314,5 +355,24 @@ clean :
 else
 .PHONY : clean
 clean :
-	-del *$(OE) *.ilk *.pdb *$(EE) matlab\*$(ME) examples\*$(EE) examples\*.ilk examples\*.pdb tests\testdai$(EE) tests\testem\testem$(EE) tests\*.pdb tests\*.ilk utils\*$(EE) utils\*.pdb utils\*.ilk $(LIB)\libdai$(LE)
+	-del *$(OE)
+	-del *.ilk
+	-del *.pdb
+	-del *$(EE)
+	-del matlab\*$(ME)
+	-del examples\*$(EE)
+	-del examples\*.ilk
+	-del examples\*.pdb
+	-del tests\testdai$(EE)
+	-del tests\testbbp$(EE)
+	-del tests\testem\testem$(EE)
+	-del tests\*.pdb
+	-del tests\*.ilk
+	-del tests\testem\*.pdb
+	-del tests\testem\*.ilk
+	-del utils\*$(EE)
+	-del utils\*.pdb
+	-del utils\*.ilk
+	-del $(LIB)\libdai$(LE)
+	-rmdir lib
 endif

@@ -1,23 +1,12 @@
-/*  Copyright (C) 2006-2008  Joris Mooij  [joris dot mooij at tuebingen dot mpg dot de]
-    Radboud University Nijmegen, The Netherlands /
-    Max Planck Institute for Biological Cybernetics, Germany
-
-    This file is part of libDAI.
-
-    libDAI is free software; you can redistribute it and/or modify
-    it under the terms of the GNU General Public License as published by
-    the Free Software Foundation; either version 2 of the License, or
-    (at your option) any later version.
-
-    libDAI is distributed in the hope that it will be useful,
-    but WITHOUT ANY WARRANTY; without even the implied warranty of
-    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-    GNU General Public License for more details.
-
-    You should have received a copy of the GNU General Public License
-    along with libDAI; if not, write to the Free Software
-    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
-*/
+/*  This file is part of libDAI - http://www.libdai.org/
+ *
+ *  libDAI is licensed under the terms of the GNU General Public License version
+ *  2, or (at your option) any later version. libDAI is distributed without any
+ *  warranty. See the file COPYING for more details.
+ *
+ *  Copyright (C) 2006-2010  Joris Mooij  [joris dot mooij at libdai dot org]
+ *  Copyright (C) 2006-2007  Radboud University Nijmegen, The Netherlands
+ */
 
 
 #include <iostream>
@@ -33,18 +22,20 @@ using namespace std;
 
 int main( int argc, char *argv[] ) {
     if( argc != 3 ) {
-        cout << "Usage: " << argv[0] << " <in.fg> <out.dot>" << endl << endl;
-        cout << "Converts a .fg (FactorGraph) file to a .dot (GraphViz) file for" << endl;
-        cout << "visualization. The .dot file can be converted to .ps (PostScript) by" << endl;
+        // Display help message if number of command line arguments is incorrect
+        cout << "This program is part of libDAI - http://www.libdai.org/" << endl << endl;
+        cout << "Usage: ./fg2dot <in.fg> <out.dot>" << endl << endl;
+        cout << "Converts a libDAI factor graph file to a GraphViz .dot file for visualization." << endl;
+        cout << "The .dot file can be converted to .ps (PostScript) by" << endl;
         cout << "'neato -T ps out.dot > out.ps' or by 'dot -T ps out.dot > out.ps'" << endl << endl;
         return 1;
     } else {
         // Read factorgraph
         FactorGraph fg;
         char *infile = argv[1];
-
         fg.ReadFromFile( infile );
 
+        // Open output file for writing (except if filename equals "-")
         ostream *os = &cout;
         ofstream outfile;
         if( string( argv[2] ) != "-" ) {
@@ -54,8 +45,9 @@ int main( int argc, char *argv[] ) {
                 return 1;
             }
             os = &outfile;
-        }
+        } // else, write to cout
 
+        // Write the .dot file
         fg.printDot( *os );
 
         return 0;

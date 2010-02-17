@@ -16,7 +16,7 @@
 
 #include <dai/util.h>
 #include <dai/properties.h>
-
+#include <dai/gibbs.h>
 #include <dai/bp.h>
 #include <dai/cbp.h>
 #include <dai/bbp.h>
@@ -30,6 +30,48 @@ using boost::shared_ptr;
 
 
 const char *CBP::Name = "CBP";
+
+
+/// Given a sorted vector of states \a xis and total state count \a n_states, return a vector of states not in \a xis
+vector<size_t> complement( vector<size_t> &xis, size_t n_states ) {
+    vector<size_t> cmp_xis( 0 );
+    size_t j = 0;
+    for( size_t xi = 0; xi < n_states; xi++ ) {
+        while( j < xis.size() && xis[j] < xi )
+            j++;
+        if( j >= xis.size() || xis[j] > xi )
+            cmp_xis.push_back(xi);
+    }
+    DAI_ASSERT( xis.size()+cmp_xis.size() == n_states );
+    return cmp_xis;
+}
+
+
+/// Computes \f$\frac{\exp(a)}{\exp(a)+\exp(b)}\f$
+Real unSoftMax( Real a, Real b ) {
+    if( a > b )
+        return 1.0 / (1.0 + exp(b-a));
+    else
+        return exp(a-b) / (exp(a-b) + 1.0);
+}
+
+
+/// Computes log of sum of exponents, i.e., \f$\log\left(\exp(a) + \exp(b)\right)\f$
+Real logSumExp( Real a, Real b ) {
+    if( a > b )
+        return a + log1p( exp( b-a ) );
+    else
+        return b + log1p( exp( a-b ) );
+}
+
+
+/// Compute sum of pairwise L-infinity distances of the first \a nv factors in each vector
+Real dist( const vector<Factor> &b1, const vector<Factor> &b2, size_t nv ) {
+    Real d = 0.0;
+    for( size_t k = 0; k < nv; k++ )
+        d += dist( b1[k], b2[k], Prob::DISTLINF );
+    return d;
+}
 
 
 void CBP::setBeliefs( const std::vector<Factor> &bs, Real logZ ) {
@@ -89,7 +131,7 @@ static vector<Factor> mixBeliefs( Real p, const vector<Factor> &b, const vector<
 
 Real CBP::run() {
     size_t seed = props.rand_seed;
-    if( seed > 0)
+    if( seed > 0 )
         rnd_seed( seed );
 
     InfAlg *bp = getInfAlg();
@@ -108,7 +150,6 @@ Real CBP::run() {
 }
 
 
-/// \todo Eventually this allow other inference algorithms that BP to be selected, via a property
 InfAlg* CBP::getInfAlg() {
     PropertySet bpProps;
     bpProps.Set("updates", props.updates);
@@ -131,9 +172,9 @@ void CBP::runRecurse( InfAlg *bp, Real orig_logZ, vector<size_t> clamped_vars_li
     vector<size_t> xis;
     Real maxVar = 0.0;
     bool found;
-    bool clampingVar = (Clamping() == Properties::ClampType::CLAMP_VAR);
+    bool clampingVar = (props.clamp == Properties::ClampType::CLAMP_VAR);
 
-    if( Recursion() == Properties::RecurseType::REC_LOGZ && recTol() > 0 && exp( bp->logZ() - orig_logZ ) < recTol() )
+    if( props.recursion == Properties::RecurseType::REC_LOGZ && props.rec_tol > 0 && exp( bp->logZ() - orig_logZ ) < props.rec_tol )
         found = false;
     else
         found = chooseNextClampVar( bp, clamped_vars_list, i, xis, &maxVar );
@@ -162,7 +203,9 @@ void CBP::runRecurse( InfAlg *bp, Real orig_logZ, vector<size_t> clamped_vars_li
     // compute complement of 'xis'
     vector<size_t> cmp_xis = complement( xis, clampingVar ? var(i).states() : factor(i).states() );
 
-    /// \todo could do this more efficiently with a nesting version of saveProbs/undoProbs
+    /// \idea dai::CBP::runRecurse() could be implemented more efficiently with a nesting version of backupFactors/restoreFactors
+    // this improvement could also be done locally: backup the clamped factor in a local variable,
+    // and restore it just before we return.
     Real lz;
     vector<Factor> b;
     InfAlg *bp_c = bp->clone();
@@ -198,11 +241,11 @@ void CBP::runRecurse( InfAlg *bp, Real orig_logZ, vector<size_t> clamped_vars_li
     Real p = unSoftMax( lz, cmp_lz );
     Real bp__d = 0.0;
 
-    if( Recursion() == Properties::RecurseType::REC_BDIFF && recTol() > 0 ) {
+    if( props.recursion == Properties::RecurseType::REC_BDIFF && props.rec_tol > 0 ) {
         vector<Factor> combined_b( mixBeliefs( p, b, cmp_b ) );
         Real new_lz = logSumExp( lz,cmp_lz );
         bp__d = dist( bp->beliefs(), combined_b, nrVars() );
-        if( exp( new_lz - orig_logZ) * bp__d < recTol() ) {
+        if( exp( new_lz - orig_logZ) * bp__d < props.rec_tol ) {
             num_leaves++;
             sum_level += clamped_vars_list.size();
             beliefs_out = combined_b;
@@ -224,7 +267,7 @@ void CBP::runRecurse( InfAlg *bp, Real orig_logZ, vector<size_t> clamped_vars_li
     if( props.verbose >= 2 ) {
         Real d = dist( bp->beliefs(), beliefs_out, nrVars() );
         cerr << "Distance (clamping " << i << "): " << d;
-        if( Recursion() == Properties::RecurseType::REC_BDIFF )
+        if( props.recursion == Properties::RecurseType::REC_BDIFF )
             cerr << "; bp_dual predicted " << bp__d;
         cerr << "; max_adjoint = " << maxVar << "; logZ = " << lz_out << " (in " << bp->logZ() << ") (orig " << orig_logZ << "); p = " << p << "; level = " << clamped_vars_list.size() << endl;
     }
@@ -239,10 +282,10 @@ bool CBP::chooseNextClampVar( InfAlg *bp, vector<size_t> &clamped_vars_list, siz
     Real tiny = 1.0e-14;
     if( props.verbose >= 3 )
         cerr << "clamped_vars_list" << clamped_vars_list << endl;
-    if( clamped_vars_list.size() >= maxClampLevel() )
+    if( clamped_vars_list.size() >= props.max_levels )
         return false;
-    if( ChooseMethod() == Properties::ChooseMethodType::CHOOSE_RANDOM ) {
-        if( Clamping() == Properties::ClampType::CLAMP_VAR ) {
+    if( props.choose == Properties::ChooseMethodType::CHOOSE_RANDOM ) {
+        if( props.clamp == Properties::ClampType::CLAMP_VAR ) {
             int t = 0, t1 = 100;
             do {
                 i = rnd( nrVars() );
@@ -282,8 +325,8 @@ bool CBP::chooseNextClampVar( InfAlg *bp, vector<size_t> &clamped_vars_list, siz
             // DAI_ASSERT(!_clamped_vars.count(i)); // not true for >2-ary variables
             DAI_IFVERB(2, endl<<"CHOOSE_RANDOM chose factor "<<i<<" state "<<xis[0]<<endl);
         }
-    } else if( ChooseMethod() == Properties::ChooseMethodType::CHOOSE_MAXENT ) {
-        if( Clamping() == Properties::ClampType::CLAMP_VAR ) {
+    } else if( props.choose == Properties::ChooseMethodType::CHOOSE_MAXENT ) {
+        if( props.clamp == Properties::ClampType::CLAMP_VAR ) {
             Real max_ent = -1.0;
             int win_k = -1, win_xk = -1;
             for( size_t k = 0; k < nrVars(); k++ ) {
@@ -324,14 +367,14 @@ bool CBP::chooseNextClampVar( InfAlg *bp, vector<size_t> &clamped_vars_list, siz
                 return false;
             }
         }
-    } else if( ChooseMethod()==Properties::ChooseMethodType::CHOOSE_BP_L1 ||
-               ChooseMethod()==Properties::ChooseMethodType::CHOOSE_BP_CFN ) {
-        bool doL1 = (ChooseMethod() == Properties::ChooseMethodType::CHOOSE_BP_L1);
+    } else if( props.choose==Properties::ChooseMethodType::CHOOSE_BP_L1 ||
+               props.choose==Properties::ChooseMethodType::CHOOSE_BP_CFN ) {
+        bool doL1 = (props.choose == Properties::ChooseMethodType::CHOOSE_BP_L1);
         vector<size_t> state;
-        if( !doL1 && needGibbsState( BBP_cost_function() ) )
-            state = getGibbsState( *bp, 2*bp->Iterations() );
+        if( !doL1 && props.bbp_cfn.needGibbsState() )
+            state = getGibbsState( bp->fg(), 2*bp->Iterations() );
         // try clamping each variable manually
-        DAI_ASSERT( Clamping() == Properties::ClampType::CLAMP_VAR );
+        DAI_ASSERT( props.clamp == Properties::ClampType::CLAMP_VAR );
         Real max_cost = 0.0;
         int win_k = -1, win_xk = -1;
         for( size_t k = 0; k < nrVars(); k++ ) {
@@ -347,7 +390,7 @@ bool CBP::chooseNextClampVar( InfAlg *bp, vector<size_t> &clamped_vars_list, siz
                     for( size_t j = 0; j < nrVars(); j++ )
                         cost += dist( bp->beliefV(j), bp1->beliefV(j), Prob::DISTL1 );
                 else
-                    cost = getCostFn( *bp1, BBP_cost_function(), &state );
+                    cost = props.bbp_cfn.evaluate( *bp1, &state );
                 if( cost > max_cost || win_k == -1 ) {
                     max_cost = cost;
                     win_k = k;
@@ -360,15 +403,15 @@ bool CBP::chooseNextClampVar( InfAlg *bp, vector<size_t> &clamped_vars_list, siz
         DAI_ASSERT( win_xk >= 0 );
         i = win_k;
         xis.resize( 1, win_xk );
-    } else if( ChooseMethod() == Properties::ChooseMethodType::CHOOSE_BBP ) {
+    } else if( props.choose == Properties::ChooseMethodType::CHOOSE_BBP ) {
         Real mvo;
         if( !maxVarOut )
             maxVarOut = &mvo;
-        bool clampingVar = (Clamping() == Properties::ClampType::CLAMP_VAR);
-        pair<size_t, size_t> cv = bbpFindClampVar( *bp, clampingVar, props.bbp_props, BBP_cost_function(), &mvo );
+        bool clampingVar = (props.clamp == Properties::ClampType::CLAMP_VAR);
+        pair<size_t, size_t> cv = BBPFindClampVar( *bp, clampingVar, props.bbp_props, props.bbp_cfn, &mvo );
 
         // if slope isn't big enough then don't clamp
-        if( mvo < minMaxAdj() )
+        if( mvo < props.min_max_adj )
             return false;
 
         size_t xi = cv.second;
@@ -380,11 +423,11 @@ bool CBP::chooseNextClampVar( InfAlg *bp, vector<size_t> &clamped_vars_list, siz
             << ", maxVar = "<< mvo << ")"
         Prob b = ( clampingVar ? bp->beliefV(i).p() : bp->beliefF(i).p());
         if( b[xi] < tiny ) {
-            cerr << "Warning, at level " << clamped_vars_list.size() << ", bbpFindClampVar found unlikely " << VAR_INFO << endl;
+            cerr << "Warning, at level " << clamped_vars_list.size() << ", BBPFindClampVar found unlikely " << VAR_INFO << endl;
             return false;
         }
         if( abs(b[xi] - 1) < tiny ) {
-            cerr << "Warning at level " << clamped_vars_list.size() << ", bbpFindClampVar found overly likely " << VAR_INFO << endl;
+            cerr << "Warning at level " << clamped_vars_list.size() << ", BBPFindClampVar found overly likely " << VAR_INFO << endl;
             return false;
         }
 
@@ -408,16 +451,9 @@ void CBP::printDebugInfo() {
 }
 
 
-//----------------------------------------------------------------
-
-
-/** Function which takes a factor graph as input, runs Gibbs and BP_dual,
- *  creates and runs a BBP object, finds best variable, returns
- *  (variable,state) pair for clamping
- */
-pair<size_t, size_t> bbpFindClampVar( const InfAlg &in_bp, bool clampingVar, const PropertySet &bbp_props, bbp_cfn_t cfn, Real *maxVarOut ) {
+pair<size_t, size_t> BBPFindClampVar( const InfAlg &in_bp, bool clampingVar, const PropertySet &bbp_props, const BBPCostFunction &cfn, Real *maxVarOut ) {
     BBP bbp( &in_bp, bbp_props );
-    initBBPCostFnAdj( bbp, in_bp, cfn, NULL );
+    bbp.initCostFnAdj( cfn, NULL );
     bbp.run();
 
     // find and return the (variable,state) with the largest adj_psi_V
@@ -475,44 +511,6 @@ pair<size_t, size_t> bbpFindClampVar( const InfAlg &in_bp, bool clampingVar, con
 }
 
 
-vector<size_t> complement( vector<size_t> &xis, size_t n_states ) {
-    vector<size_t> cmp_xis( 0 );
-    size_t j = 0;
-    for( size_t xi = 0; xi < n_states; xi++ ) {
-        while( j < xis.size() && xis[j] < xi )
-            j++;
-        if( j >= xis.size() || xis[j] > xi )
-            cmp_xis.push_back(xi);
-    }
-    DAI_ASSERT( xis.size()+cmp_xis.size() == n_states );
-    return cmp_xis;
-}
-
-
-Real unSoftMax( Real a, Real b ) {
-    if( a > b )
-        return 1.0 / (1.0 + exp(b-a));
-    else
-        return exp(a-b) / (exp(a-b) + 1.0);
-}
-
-
-Real logSumExp( Real a, Real b ) {
-    if( a > b )
-        return a + log1p( exp( b-a ) );
-    else
-        return b + log1p( exp( a-b ) );
-}
-
-
-Real dist( const vector<Factor> &b1, const vector<Factor> &b2, size_t nv ) {
-    Real d = 0.0;
-    for( size_t k = 0; k < nv; k++ )
-        d += dist( b1[k], b2[k], Prob::DISTLINF );
-    return d;
-}
-
-
 } // end of namespace dai
 
 
@@ -524,45 +522,49 @@ namespace dai {
 void CBP::Properties::set(const PropertySet &opts)
 {
     const std::set<PropertyKey> &keys = opts.keys();
-    std::set<PropertyKey>::const_iterator i;
-    for(i=keys.begin(); i!=keys.end(); i++) {
-        if(*i == "verbose") continue;
-        if(*i == "tol") continue;
-        if(*i == "updates") continue;
-        if(*i == "maxiter") continue;
-        if(*i == "rec_tol") continue;
-        if(*i == "max_levels") continue;
-        if(*i == "min_max_adj") continue;
-        if(*i == "choose") continue;
-        if(*i == "recursion") continue;
-        if(*i == "clamp") continue;
-        if(*i == "bbp_props") continue;
-        if(*i == "bbp_cfn") continue;
-        if(*i == "rand_seed") continue;
-        if(*i == "clamp_outfile") continue;
-        DAI_THROWE(UNKNOWN_PROPERTY_TYPE, "CBP: Unknown property " + *i);
+    std::string errormsg;
+    for( std::set<PropertyKey>::const_iterator i = keys.begin(); i != keys.end(); i++ ) {
+        if( *i == "verbose" ) continue;
+        if( *i == "tol" ) continue;
+        if( *i == "updates" ) continue;
+        if( *i == "maxiter" ) continue;
+        if( *i == "rec_tol" ) continue;
+        if( *i == "max_levels" ) continue;
+        if( *i == "min_max_adj" ) continue;
+        if( *i == "choose" ) continue;
+        if( *i == "recursion" ) continue;
+        if( *i == "clamp" ) continue;
+        if( *i == "bbp_props" ) continue;
+        if( *i == "bbp_cfn" ) continue;
+        if( *i == "rand_seed" ) continue;
+        if( *i == "clamp_outfile" ) continue;
+        errormsg = errormsg + "CBP: Unknown property " + *i + "\n";
     }
-    if(!opts.hasKey("tol"))
-        DAI_THROWE(NOT_ALL_PROPERTIES_SPECIFIED,"CBP: Missing property \"tol\" for method \"CBP\"");
-    if(!opts.hasKey("updates"))
-        DAI_THROWE(NOT_ALL_PROPERTIES_SPECIFIED,"CBP: Missing property \"updates\" for method \"CBP\"");
-    if(!opts.hasKey("maxiter"))
-        DAI_THROWE(NOT_ALL_PROPERTIES_SPECIFIED,"CBP: Missing property \"maxiter\" for method \"CBP\"");
-    if(!opts.hasKey("rec_tol"))
-        DAI_THROWE(NOT_ALL_PROPERTIES_SPECIFIED,"CBP: Missing property \"rec_tol\" for method \"CBP\"");
-    if(!opts.hasKey("min_max_adj"))
-        DAI_THROWE(NOT_ALL_PROPERTIES_SPECIFIED,"CBP: Missing property \"min_max_adj\" for method \"CBP\"");
-    if(!opts.hasKey("choose"))
-        DAI_THROWE(NOT_ALL_PROPERTIES_SPECIFIED,"CBP: Missing property \"choose\" for method \"CBP\"");
-    if(!opts.hasKey("recursion"))
-        DAI_THROWE(NOT_ALL_PROPERTIES_SPECIFIED,"CBP: Missing property \"recursion\" for method \"CBP\"");
-    if(!opts.hasKey("clamp"))
-        DAI_THROWE(NOT_ALL_PROPERTIES_SPECIFIED,"CBP: Missing property \"clamp\" for method \"CBP\"");
-    if(!opts.hasKey("bbp_props"))
-        DAI_THROWE(NOT_ALL_PROPERTIES_SPECIFIED,"CBP: Missing property \"bbp_props\" for method \"CBP\"");
-    if(!opts.hasKey("bbp_cfn"))
-        DAI_THROWE(NOT_ALL_PROPERTIES_SPECIFIED,"CBP: Missing property \"bbp_cfn\" for method \"CBP\"");
-    if(opts.hasKey("verbose")) {
+    if( !errormsg.empty() )
+        DAI_THROWE(UNKNOWN_PROPERTY, errormsg);
+    if( !opts.hasKey("tol") )
+        errormsg = errormsg + "CBP: Missing property \"tol\" for method \"CBP\"\n";
+    if( !opts.hasKey("updates") )
+        errormsg = errormsg + "CBP: Missing property \"updates\" for method \"CBP\"\n";
+    if( !opts.hasKey("maxiter") )
+        errormsg = errormsg + "CBP: Missing property \"maxiter\" for method \"CBP\"\n";
+    if( !opts.hasKey("rec_tol") )
+        errormsg = errormsg + "CBP: Missing property \"rec_tol\" for method \"CBP\"\n";
+    if( !opts.hasKey("min_max_adj") )
+        errormsg = errormsg + "CBP: Missing property \"min_max_adj\" for method \"CBP\"\n";
+    if( !opts.hasKey("choose") )
+        errormsg = errormsg + "CBP: Missing property \"choose\" for method \"CBP\"\n";
+    if( !opts.hasKey("recursion") )
+        errormsg = errormsg + "CBP: Missing property \"recursion\" for method \"CBP\"\n";
+    if( !opts.hasKey("clamp") )
+        errormsg = errormsg + "CBP: Missing property \"clamp\" for method \"CBP\"\n";
+    if( !opts.hasKey("bbp_props") )
+        errormsg = errormsg + "CBP: Missing property \"bbp_props\" for method \"CBP\"\n";
+    if( !opts.hasKey("bbp_cfn") )
+        errormsg = errormsg + "CBP: Missing property \"bbp_cfn\" for method \"CBP\"\n";
+    if( !errormsg.empty() )
+        DAI_THROWE(NOT_ALL_PROPERTIES_SPECIFIED,errormsg);
+    if( opts.hasKey("verbose") ) {
         verbose = opts.getStringAs<size_t>("verbose");
     } else {
         verbose = 0;
@@ -571,7 +573,7 @@ void CBP::Properties::set(const PropertySet &opts)
     updates = opts.getStringAs<UpdateType>("updates");
     maxiter = opts.getStringAs<size_t>("maxiter");
     rec_tol = opts.getStringAs<Real>("rec_tol");
-    if(opts.hasKey("max_levels")) {
+    if( opts.hasKey("max_levels") ) {
         max_levels = opts.getStringAs<size_t>("max_levels");
     } else {
         max_levels = 10;
@@ -581,13 +583,13 @@ void CBP::Properties::set(const PropertySet &opts)
     recursion = opts.getStringAs<RecurseType>("recursion");
     clamp = opts.getStringAs<ClampType>("clamp");
     bbp_props = opts.getStringAs<PropertySet>("bbp_props");
-    bbp_cfn = opts.getStringAs<bbp_cfn_t>("bbp_cfn");
-    if(opts.hasKey("rand_seed")) {
+    bbp_cfn = opts.getStringAs<BBPCostFunction>("bbp_cfn");
+    if( opts.hasKey("rand_seed") ) {
         rand_seed = opts.getStringAs<size_t>("rand_seed");
     } else {
         rand_seed = 0;
     }
-    if(opts.hasKey("clamp_outfile")) {
+    if( opts.hasKey("clamp_outfile") ) {
         clamp_outfile = opts.getStringAs<std::string>("clamp_outfile");
     } else {
         clamp_outfile = "";

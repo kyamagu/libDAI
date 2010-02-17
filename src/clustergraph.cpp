@@ -4,7 +4,7 @@
  *  2, or (at your option) any later version. libDAI is distributed without any
  *  warranty. See the file COPYING for more details.
  *
- *  Copyright (C) 2006-2009  Joris Mooij  [joris dot mooij at libdai dot org]
+ *  Copyright (C) 2006-2010  Joris Mooij  [joris dot mooij at libdai dot org]
  *  Copyright (C) 2006-2007  Radboud University Nijmegen, The Netherlands
  */
 
@@ -45,64 +45,71 @@ ClusterGraph::ClusterGraph( const std::vector<VarSet> & cls ) : G(), vars(), clu
 }
 
 
-ClusterGraph ClusterGraph::VarElim_MinFill() const {
-    // Make a copy
-    ClusterGraph cl(*this);
-    cl.eraseNonMaximal();
-
-    ClusterGraph result;
-
-    // Construct set of variable indices
-    set<size_t> varindices;
-    for( size_t i = 0; i < vars.size(); ++i )
-        varindices.insert( i );
-
-    // Do variable elimination
-    while( !varindices.empty() ) {
-        set<size_t>::const_iterator lowest = varindices.end();
-        size_t lowest_cost = -1UL;
-        for( set<size_t>::const_iterator i = varindices.begin(); i != varindices.end(); i++ ) {
-            size_t cost = cl.eliminationCost( *i );
-            if( lowest == varindices.end() || lowest_cost > cost ) {
-                lowest = i;
-                lowest_cost = cost;
-            }
-        }
-        size_t i = *lowest;
-
-        result.insert( cl.Delta( i ) );
-
-        cl.insert( cl.delta( i ) );
-        cl.eraseSubsuming( i );
-        cl.eraseNonMaximal();
-        varindices.erase( i );
-    }
-
-    return result;
+size_t sequentialVariableElimination::operator()( const ClusterGraph &cl, const std::set<size_t> &/*remainingVars*/ ) {
+    return cl.findVar( seq.at(i++) );
 }
 
 
-
-ClusterGraph ClusterGraph::VarElim( const std::vector<Var> & ElimSeq ) const {
-    // Make a copy
-    ClusterGraph cl(*this);
-    cl.eraseNonMaximal();
-
-    ClusterGraph result;
-
-    // Do variable elimination
-    for( vector<Var>::const_iterator n = ElimSeq.begin(); n != ElimSeq.end(); n++ ) {
-        size_t i = cl.findVar( *n );
-        DAI_ASSERT( i != cl.vars.size() );
-
-        result.insert( cl.Delta(i) );
-
-        cl.insert( cl.delta(i) );
-        cl.eraseSubsuming( i );
-        cl.eraseNonMaximal();
+size_t greedyVariableElimination::operator()( const ClusterGraph &cl, const std::set<size_t> &remainingVars ) {
+    set<size_t>::const_iterator lowest = remainingVars.end();
+    size_t lowest_cost = -1UL;
+    for( set<size_t>::const_iterator i = remainingVars.begin(); i != remainingVars.end(); i++ ) {
+        size_t cost = heuristic( cl, *i );
+        if( lowest == remainingVars.end() || lowest_cost > cost ) {
+            lowest = i;
+            lowest_cost = cost;
+        }
     }
+    return *lowest;
+}
 
-    return result;
+
+size_t eliminationCost_MinNeighbors( const ClusterGraph &cl, size_t i ) {
+    std::vector<size_t> id_n = cl.G.delta1( i );
+    return id_n.size();
+}
+
+
+size_t eliminationCost_MinWeight( const ClusterGraph &cl, size_t i ) {
+    std::vector<size_t> id_n = cl.G.delta1( i );
+    
+    size_t cost = 1;
+    for( size_t _i = 0; _i < id_n.size(); _i++ )
+        cost *= cl.vars[id_n[_i]].states();
+
+    return cost;
+}
+
+
+size_t eliminationCost_MinFill( const ClusterGraph &cl, size_t i ) {
+    std::vector<size_t> id_n = cl.G.delta1( i );
+
+    size_t cost = 0;
+    // for each unordered pair {i1,i2} adjacent to n
+    for( size_t _i1 = 0; _i1 < id_n.size(); _i1++ )
+        for( size_t _i2 = _i1 + 1; _i2 < id_n.size(); _i2++ ) {
+            // if i1 and i2 are not adjacent, eliminating n would make them adjacent
+            if( !cl.adj(id_n[_i1], id_n[_i2]) )
+                cost++;
+        }
+
+    return cost;
+}
+
+
+size_t eliminationCost_WeightedMinFill( const ClusterGraph &cl, size_t i ) {
+    std::vector<size_t> id_n = cl.G.delta1( i );
+
+    size_t cost = 0;
+    // for each unordered pair {i1,i2} adjacent to n
+    for( size_t _i1 = 0; _i1 < id_n.size(); _i1++ )
+        for( size_t _i2 = _i1 + 1; _i2 < id_n.size(); _i2++ ) {
+            // if i1 and i2 are not adjacent, eliminating n would make them adjacent
+            if( !cl.adj(id_n[_i1], id_n[_i2]) )
+                cost += cl.vars[id_n[_i1]].states() * cl.vars[id_n[_i2]].states();
+        }
+
+    return cost;
 }
 
 

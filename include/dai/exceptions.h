@@ -4,7 +4,7 @@
  *  2, or (at your option) any later version. libDAI is distributed without any
  *  warranty. See the file COPYING for more details.
  *
- *  Copyright (C) 2006-2009  Joris Mooij  [joris dot mooij at libdai dot org]
+ *  Copyright (C) 2006-2010  Joris Mooij  [joris dot mooij at libdai dot org]
  *  Copyright (C) 2006-2007  Radboud University Nijmegen, The Netherlands
  */
 
@@ -60,7 +60,7 @@
 /// Assertion mechanism similar to DAI_ASSERT which is only active if DAI_DEBUG is defined
 #define DAI_DEBASSERT(x) do {DAI_ASSERT(x);} while(0)
 #else
-#define DAI_DEBASSERT(X) do {} while(0)
+#define DAI_DEBASSERT(x) do {} while(0)
 #endif
 
 
@@ -79,12 +79,15 @@ class Exception : public std::runtime_error {
                    ASSERTION_FAILED,
                    IMPOSSIBLE_TYPECAST,
                    OBJECT_NOT_FOUND,
+                   BELIEF_NOT_AVAILABLE,
                    UNKNOWN_ENUM_VALUE,
                    UNKNOWN_DAI_ALGORITHM,
                    UNKNOWN_PARAMETER_ESTIMATION_METHOD,
                    UNKNOWN_PROPERTY_TYPE,
+                   UNKNOWN_PROPERTY,
                    MALFORMED_PROPERTY,
                    NOT_ALL_PROPERTIES_SPECIFIED,
+                   INVALID_ALIAS,
                    CANNOT_READ_FILE,
                    CANNOT_WRITE_FILE,
                    INVALID_FACTORGRAPH_FILE,

@@ -4,7 +4,7 @@
  *  2, or (at your option) any later version. libDAI is distributed without any
  *  warranty. See the file COPYING for more details.
  *
- *  Copyright (C) 2006-2009  Joris Mooij  [joris dot mooij at libdai dot org]
+ *  Copyright (C) 2006-2010  Joris Mooij  [joris dot mooij at libdai dot org]
  *  Copyright (C) 2006-2007  Radboud University Nijmegen, The Netherlands
  */
 
@@ -21,51 +21,47 @@ namespace dai {
 using namespace std;
 
 
-DEdgeVec GrowRootedTree( const Graph &T, size_t Root ) {
-    DEdgeVec result;
-    if( T.size() == 0 )
-        return result;
-    else {
+RootedTree::RootedTree( const GraphEL &T, size_t Root ) {
+    if( T.size() != 0 ) {
         // Make a copy
-        Graph Gr = T;
+        GraphEL Gr = T;
 
         // Nodes in the tree
-        set<size_t> treeV;
+        set<size_t> nodes;
 
         // Start with the root
-        treeV.insert( Root );
+        nodes.insert( Root );
 
         // Keep adding edges until done
         while( !(Gr.empty()) )
-            for( Graph::iterator e = Gr.begin(); e != Gr.end(); ) {
-                bool e1_in_treeV = treeV.count( e->n1 );
-                bool e2_in_treeV = treeV.count( e->n2 );
-                DAI_ASSERT( !(e1_in_treeV && e2_in_treeV) );
-                if( e1_in_treeV ) {
+            for( GraphEL::iterator e = Gr.begin(); e != Gr.end(); ) {
+                bool e1_in_nodes = nodes.count( e->n1 );
+                bool e2_in_nodes = nodes.count( e->n2 );
+                DAI_ASSERT( !(e1_in_nodes && e2_in_nodes) );
+                if( e1_in_nodes ) {
                     // Add directed edge, pointing away from the root
-                    result.push_back( DEdge( e->n1, e->n2 ) );
-                    treeV.insert( e->n2 );
+                    push_back( DEdge( e->n1, e->n2 ) );
+                    nodes.insert( e->n2 );
                     // Erase the edge
                     Gr.erase( e++ );
-                } else if( e2_in_treeV ) {
-                    result.push_back( DEdge( e->n2, e->n1 ) );
-                    treeV.insert( e->n1 );
+                } else if( e2_in_nodes ) {
+                    // Add directed edge, pointing away from the root
+                    push_back( DEdge( e->n2, e->n1 ) );
+                    nodes.insert( e->n1 );
                     // Erase the edge
                     Gr.erase( e++ );
                 } else
                     e++;
             }
-
-        return result;
     }
 }
 
 
-UEdgeVec RandomDRegularGraph( size_t N, size_t d ) {
+GraphEL RandomDRegularGraph( size_t N, size_t d ) {
     DAI_ASSERT( (N * d) % 2 == 0 );
 
     bool ready = false;
-    UEdgeVec G;
+    std::vector<UEdge> G;
 
     size_t tries = 0;
     while( !ready ) {
@@ -107,9 +103,9 @@ UEdgeVec RandomDRegularGraph( size_t N, size_t d ) {
 
             vector<size_t> degrees;
             degrees.resize( N, 0 );
-            for( UEdgeVec::const_iterator e = G.begin(); e != G.end(); e++ ) {
-                degrees[e->n1]++;
-                degrees[e->n2]++;
+            foreach( const UEdge &e, G ) {
+                degrees[e.n1]++;
+                degrees[e.n2]++;
             }
             ready = true;
             for( size_t n = 0; n < N; n++ )
@@ -121,7 +117,7 @@ UEdgeVec RandomDRegularGraph( size_t N, size_t d ) {
             ready = false;
     }
 
-    return G;
+    return GraphEL( G.begin(), G.end() );
 }
 
 

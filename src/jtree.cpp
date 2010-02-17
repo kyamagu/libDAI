@@ -4,7 +4,7 @@
  *  2, or (at your option) any later version. libDAI is distributed without any
  *  warranty. See the file COPYING for more details.
  *
- *  Copyright (C) 2006-2009  Joris Mooij  [joris dot mooij at libdai dot org]
+ *  Copyright (C) 2006-2010  Joris Mooij  [joris dot mooij at libdai dot org]
  *  Copyright (C) 2006-2007  Radboud University Nijmegen, The Netherlands
  */
 
@@ -33,6 +33,10 @@ void JTree::setProperties( const PropertySet &opts ) {
         props.inference = opts.getStringAs<Properties::InfType>("inference");
     else
         props.inference = Properties::InfType::SUMPROD;
+    if( opts.hasKey("heuristic") )
+        props.heuristic = opts.getStringAs<Properties::HeuristicType>("heuristic");
+    else
+        props.heuristic = Properties::HeuristicType::MINFILL;
 }
 
 
@@ -41,6 +45,7 @@ PropertySet JTree::getProperties() const {
     opts.Set( "verbose", props.verbose );
     opts.Set( "updates", props.updates );
     opts.Set( "inference", props.inference );
+    opts.Set( "heuristic", props.heuristic );
     return opts;
 }
 
@@ -50,6 +55,7 @@ string JTree::printProperties() const {
     s << "[";
     s << "verbose=" << props.verbose << ",";
     s << "updates=" << props.updates << ",";
+    s << "heuristic=" << props.heuristic << ",";
     s << "inference=" << props.inference << "]";
     return s.str();
 }
@@ -77,23 +83,41 @@ JTree::JTree( const FactorGraph &fg, const PropertySet &opts, bool automatic ) :
         if( props.verbose >= 3 )
             cerr << "Maximal clusters: " << _cg << endl;
 
-        vector<VarSet> ElimVec = _cg.VarElim_MinFill().eraseNonMaximal().toVector();
+        // Use heuristic to guess optimal elimination sequence
+        greedyVariableElimination::eliminationCostFunction ec(NULL);
+        switch( (size_t)props.heuristic ) {
+            case Properties::HeuristicType::MINNEIGHBORS:
+                ec = eliminationCost_MinNeighbors;
+                break;
+            case Properties::HeuristicType::MINWEIGHT:
+                ec = eliminationCost_MinWeight;
+                break;
+            case Properties::HeuristicType::MINFILL:
+                ec = eliminationCost_MinFill;
+                break;
+            case Properties::HeuristicType::WEIGHTEDMINFILL:
+                ec = eliminationCost_WeightedMinFill;
+                break;
+            default:
+                DAI_THROW(UNKNOWN_ENUM_VALUE);
+        }
+        vector<VarSet> ElimVec = _cg.VarElim( greedyVariableElimination( ec ) ).eraseNonMaximal().toVector();
         if( props.verbose >= 3 )
-            cerr << "VarElim_MinFill result: " << ElimVec << endl;
+            cerr << "VarElim result: " << ElimVec << endl;
 
+        // Generate the junction tree corresponding to the elimination sequence
         GenerateJT( ElimVec );
     }
 }
 
 
-void JTree::GenerateJT( const std::vector<VarSet> &Cliques ) {
+void JTree::construct( const std::vector<VarSet> &cl, bool verify ) {
     // Construct a weighted graph (each edge is weighted with the cardinality
-    // of the intersection of the nodes, where the nodes are the elements of
-    // Cliques).
+    // of the intersection of the nodes, where the nodes are the elements of cl).
     WeightedGraph<int> JuncGraph;
-    for( size_t i = 0; i < Cliques.size(); i++ )
-        for( size_t j = i+1; j < Cliques.size(); j++ ) {
-            size_t w = (Cliques[i] & Cliques[j]).size();
+    for( size_t i = 0; i < cl.size(); i++ )
+        for( size_t j = i+1; j < cl.size(); j++ ) {
+            size_t w = (cl[i] & cl[j]).size();
             if( w )
                 JuncGraph[UEdge(i,j)] = w;
         }
@@ -104,24 +128,29 @@ void JTree::GenerateJT( const std::vector<VarSet> &Cliques ) {
     // Construct corresponding region graph
 
     // Create outer regions
-    ORs.reserve( Cliques.size() );
-    for( size_t i = 0; i < Cliques.size(); i++ )
-        ORs.push_back( FRegion( Factor(Cliques[i], 1.0), 1.0 ) );
+    ORs.clear();
+    ORs.reserve( cl.size() );
+    for( size_t i = 0; i < cl.size(); i++ )
+        ORs.push_back( FRegion( Factor(cl[i], 1.0), 1.0 ) );
 
     // For each factor, find an outer region that subsumes that factor.
     // Then, multiply the outer region with that factor.
+    fac2OR.clear();
+    fac2OR.resize( nrFactors(), -1U );
     for( size_t I = 0; I < nrFactors(); I++ ) {
         size_t alpha;
         for( alpha = 0; alpha < nrORs(); alpha++ )
             if( OR(alpha).vars() >> factor(I).vars() ) {
-                fac2OR.push_back( alpha );
+                fac2OR[I] = alpha;
                 break;
             }
-        DAI_ASSERT( alpha != nrORs() );
+        if( verify )
+            DAI_ASSERT( alpha != nrORs() );
     }
     RecomputeORs();
 
     // Create inner regions and edges
+    IRs.clear();
     IRs.reserve( RTree.size() );
     vector<Edge> edges;
     edges.reserve( 2 * RTree.size() );
@@ -129,13 +158,18 @@ void JTree::GenerateJT( const std::vector<VarSet> &Cliques ) {
         edges.push_back( Edge( RTree[i].n1, nrIRs() ) );
         edges.push_back( Edge( RTree[i].n2, nrIRs() ) );
         // inner clusters have counting number -1
-        IRs.push_back( Region( Cliques[RTree[i].n1] & Cliques[RTree[i].n2], -1.0 ) );
+        IRs.push_back( Region( cl[RTree[i].n1] & cl[RTree[i].n2], -1.0 ) );
     }
 
     // create bipartite graph
     G.construct( nrORs(), nrIRs(), edges.begin(), edges.end() );
 
-    // Create messages and beliefs
+    // Check counting numbers
+#ifdef DAI_DEBUG
+    checkCountingNumbers();
+#endif
+
+    // Create beliefs
     Qa.clear();
     Qa.reserve( nrORs() );
     for( size_t alpha = 0; alpha < nrORs(); alpha++ )
@@ -145,7 +179,13 @@ void JTree::GenerateJT( const std::vector<VarSet> &Cliques ) {
     Qb.reserve( nrIRs() );
     for( size_t beta = 0; beta < nrIRs(); beta++ )
         Qb.push_back( Factor( IR(beta), 1.0 ) );
+}
 
+
+void JTree::GenerateJT( const std::vector<VarSet> &cl ) {
+    construct( cl, true );
+
+    // Create messages
     _mes.clear();
     _mes.reserve( nrORs() );
     for( size_t alpha = 0; alpha < nrORs(); alpha++ ) {
@@ -155,12 +195,8 @@ void JTree::GenerateJT( const std::vector<VarSet> &Cliques ) {
             _mes[alpha].push_back( Factor( IR(beta), 1.0 ) );
     }
 
-    // Check counting numbers
-    checkCountingNumbers();
-
-    if( props.verbose >= 3 ) {
-        cerr << "Resulting regiongraph: " << *this << endl;
-    }
+    if( props.verbose >= 3 )
+        cerr << "Regiongraph generated by JTree::GenerateJT: " << *this << endl;
 }
 
 
@@ -169,20 +205,23 @@ string JTree::identify() const {
 }
 
 
-Factor JTree::belief( const VarSet &ns ) const {
+Factor JTree::belief( const VarSet &vs ) const {
     vector<Factor>::const_iterator beta;
     for( beta = Qb.begin(); beta != Qb.end(); beta++ )
-        if( beta->vars() >> ns )
+        if( beta->vars() >> vs )
             break;
     if( beta != Qb.end() )
-        return( beta->marginal(ns) );
+        return( beta->marginal(vs) );
     else {
         vector<Factor>::const_iterator alpha;
         for( alpha = Qa.begin(); alpha != Qa.end(); alpha++ )
-            if( alpha->vars() >> ns )
+            if( alpha->vars() >> vs )
                 break;
-        DAI_ASSERT( alpha != Qa.end() );
-        return( alpha->marginal(ns) );
+        if( alpha == Qa.end() ) {
+            DAI_THROW(BELIEF_NOT_AVAILABLE);
+            return Factor();
+        } else
+            return( alpha->marginal(vs) );
     }
 }
 
@@ -197,12 +236,6 @@ vector<Factor> JTree::beliefs() const {
 }
 
 
-Factor JTree::belief( const Var &n ) const {
-    return belief( (VarSet)n );
-}
-
-
-// Needs no init
 void JTree::runHUGIN() {
     for( size_t alpha = 0; alpha < nrORs(); alpha++ )
         Qa[alpha] = OR(alpha);
@@ -250,7 +283,6 @@ void JTree::runHUGIN() {
 }
 
 
-// Really needs no init! Initial messages can be anything.
 void JTree::runShaferShenoy() {
     // First pass
     _logZ = 0.0;
@@ -324,56 +356,49 @@ Real JTree::run() {
 
 
 Real JTree::logZ() const {
-    Real s = 0.0;
+/*    Real s = 0.0;
     for( size_t beta = 0; beta < nrIRs(); beta++ )
         s += IR(beta).c() * Qb[beta].entropy();
     for( size_t alpha = 0; alpha < nrORs(); alpha++ ) {
         s += OR(alpha).c() * Qa[alpha].entropy();
         s += (OR(alpha).log(true) * Qa[alpha]).sum();
     }
-    return s;
+    DAI_ASSERT( abs( _logZ - s ) < 1e-8 );
+    return s;*/
+    return _logZ;
 }
 
 
-
-size_t JTree::findEfficientTree( const VarSet& ns, DEdgeVec &Tree, size_t PreviousRoot ) const {
-    // find new root clique (the one with maximal statespace overlap with ns)
+size_t JTree::findEfficientTree( const VarSet& vs, RootedTree &Tree, size_t PreviousRoot ) const {
+    // find new root clique (the one with maximal statespace overlap with vs)
     size_t maxval = 0, maxalpha = 0;
     for( size_t alpha = 0; alpha < nrORs(); alpha++ ) {
-        size_t val = VarSet(ns & OR(alpha).vars()).nrStates();
+        size_t val = VarSet(vs & OR(alpha).vars()).nrStates();
         if( val > maxval ) {
             maxval = val;
             maxalpha = alpha;
         }
     }
 
-    // grow new tree
-    Graph oldTree;
-    for( DEdgeVec::const_iterator e = RTree.begin(); e != RTree.end(); e++ )
-        oldTree.insert( UEdge(e->n1, e->n2) );
-    DEdgeVec newTree = GrowRootedTree( oldTree, maxalpha );
+    // reorder the tree edges such that maxalpha becomes the new root
+    RootedTree newTree( GraphEL( RTree.begin(), RTree.end() ), maxalpha );
 
-    // identify subtree that contains variables of ns which are not in the new root
-    VarSet nsrem = ns / OR(maxalpha).vars();
+    // identify subtree that contains all variables of vs which are not in the new root
     set<DEdge> subTree;
-    // for each variable in ns that is not in the root clique
-    for( VarSet::const_iterator n = nsrem.begin(); n != nsrem.end(); n++ ) {
-        // find first occurence of *n in the tree, which is closest to the root
-        size_t e = 0;
-        for( ; e != newTree.size(); e++ ) {
-            if( OR(newTree[e].n2).vars().contains( *n ) )
-                break;
-        }
-        DAI_ASSERT( e != newTree.size() );
-
-        // track-back path to root and add edges to subTree
-        subTree.insert( newTree[e] );
-        size_t pos = newTree[e].n1;
-        for( ; e > 0; e-- )
-            if( newTree[e-1].n2 == pos ) {
-                subTree.insert( newTree[e-1] );
-                pos = newTree[e-1].n1;
+    // for each variable in vs
+    for( VarSet::const_iterator n = vs.begin(); n != vs.end(); n++ ) {
+        for( size_t e = 0; e < newTree.size(); e++ ) {
+            if( OR(newTree[e].n2).vars().contains( *n ) ) {
+                size_t f = e;
+                subTree.insert( newTree[f] );
+                size_t pos = newTree[f].n1;
+                for( ; f > 0; f-- )
+                    if( newTree[f-1].n2 == pos ) {
+                        subTree.insert( newTree[f-1] );
+                        pos = newTree[f-1].n1;
+                    }
             }
+        }
     }
     if( PreviousRoot != (size_t)-1 && PreviousRoot != maxalpha) {
         // find first occurence of PreviousRoot in the tree, which is closest to the new root
@@ -397,67 +422,42 @@ size_t JTree::findEfficientTree( const VarSet& ns, DEdgeVec &Tree, size_t Previo
     // Resulting Tree is a reordered copy of newTree
     // First add edges in subTree to Tree
     Tree.clear();
-    for( DEdgeVec::const_iterator e = newTree.begin(); e != newTree.end(); e++ )
-        if( subTree.count( *e ) ) {
+    vector<DEdge> remTree;
+    for( RootedTree::const_iterator e = newTree.begin(); e != newTree.end(); e++ )
+        if( subTree.count( *e ) )
             Tree.push_back( *e );
-        }
-    // Then add edges pointing away from nsrem
-    // FIXME
-/*  for( DEdgeVec::const_iterator e = newTree.begin(); e != newTree.end(); e++ )
-        for( set<DEdge>::const_iterator sTi = subTree.begin(); sTi != subTree.end(); sTi++ )
-            if( *e != *sTi ) {
-                if( e->n1 == sTi->n1 || e->n1 == sTi->n2 ||
-                    e->n2 == sTi->n1 || e->n2 == sTi->n2 ) {
-                    Tree.push_back( *e );
-                }
-            }*/
-    // FIXME
-/*  for( DEdgeVec::const_iterator e = newTree.begin(); e != newTree.end(); e++ )
-        if( find( Tree.begin(), Tree.end(), *e) == Tree.end() ) {
-            bool found = false;
-            for( VarSet::const_iterator n = nsrem.begin(); n != nsrem.end(); n++ )
-                if( (OR(e->n1).vars() && *n) ) {
-                    found = true;
-                    break;
-                }
-            if( found ) {
-                Tree.push_back( *e );
-            }
-        }*/
+        else
+            remTree.push_back( *e );
     size_t subTreeSize = Tree.size();
     // Then add remaining edges
-    for( DEdgeVec::const_iterator e = newTree.begin(); e != newTree.end(); e++ )
-        if( find( Tree.begin(), Tree.end(), *e ) == Tree.end() )
-            Tree.push_back( *e );
+    copy( remTree.begin(), remTree.end(), back_inserter( Tree ) );
 
     return subTreeSize;
 }
 
 
-// Cutset conditioning
-// assumes that run() has been called already
-Factor JTree::calcMarginal( const VarSet& ns ) {
+Factor JTree::calcMarginal( const VarSet& vs ) {
     vector<Factor>::const_iterator beta;
     for( beta = Qb.begin(); beta != Qb.end(); beta++ )
-        if( beta->vars() >> ns )
+        if( beta->vars() >> vs )
             break;
     if( beta != Qb.end() )
-        return( beta->marginal(ns) );
+        return( beta->marginal(vs) );
     else {
         vector<Factor>::const_iterator alpha;
         for( alpha = Qa.begin(); alpha != Qa.end(); alpha++ )
-            if( alpha->vars() >> ns )
+            if( alpha->vars() >> vs )
                 break;
         if( alpha != Qa.end() )
-            return( alpha->marginal(ns) );
+            return( alpha->marginal(vs) );
         else {
             // Find subtree to do efficient inference
-            DEdgeVec T;
-            size_t Tsize = findEfficientTree( ns, T );
+            RootedTree T;
+            size_t Tsize = findEfficientTree( vs, T );
 
             // Find remaining variables (which are not in the new root)
-            VarSet nsrem = ns / OR(T.front().n1).vars();
-            Factor Pns (ns, 0.0);
+            VarSet vsrem = vs / OR(T.front().n1).vars();
+            Factor Pvs (vs, 0.0);
 
             // Save Qa and Qb on the subtree
             map<size_t,Factor> Qa_old;
@@ -481,15 +481,15 @@ Factor JTree::calcMarginal( const VarSet& ns ) {
                     Qb_old[beta] = Qb[beta];
             }
 
-            // For all states of nsrem
-            for( State s(nsrem); s.valid(); s++ ) {
+            // For all states of vsrem
+            for( State s(vsrem); s.valid(); s++ ) {
                 // CollectEvidence
                 Real logZ = 0.0;
                 for( size_t i = Tsize; (i--) != 0; ) {
                 // Make outer region T[i].n1 consistent with outer region T[i].n2
                 // IR(i) = seperator OR(T[i].n1) && OR(T[i].n2)
 
-                    for( VarSet::const_iterator n = nsrem.begin(); n != nsrem.end(); n++ )
+                    for( VarSet::const_iterator n = vsrem.begin(); n != vsrem.end(); n++ )
                         if( Qa[T[i].n2].vars() >> *n ) {
                             Factor piet( *n, 0.0 );
                             piet.set( s(*n), 1.0 );
@@ -503,9 +503,9 @@ Factor JTree::calcMarginal( const VarSet& ns ) {
                 }
                 logZ += log(Qa[T[0].n1].normalize());
 
-                Factor piet( nsrem, 0.0 );
+                Factor piet( vsrem, 0.0 );
                 piet.set( s, exp(logZ) );
-                Pns += piet * Qa[T[0].n1].marginal( ns / nsrem, false );      // OPTIMIZE ME
+                Pvs += piet * Qa[T[0].n1].marginal( vs / vsrem, false );      // OPTIMIZE ME
 
                 // Restore clamped beliefs
                 for( map<size_t,Factor>::const_iterator alpha = Qa_old.begin(); alpha != Qa_old.end(); alpha++ )
@@ -514,17 +514,13 @@ Factor JTree::calcMarginal( const VarSet& ns ) {
                     Qb[beta->first] = beta->second;
             }
 
-            return( Pns.normalized() );
+            return( Pvs.normalized() );
         }
     }
 }
 
 
-/// Calculates upper bound to the treewidth of a FactorGraph
-/** \relates JTree
- *  \return a pair (number of variables in largest clique, number of states in largest clique)
- */
-std::pair<size_t,size_t> treewidth( const FactorGraph & fg ) {
+std::pair<size_t,double> boundTreewidth( const FactorGraph &fg, greedyVariableElimination::eliminationCostFunction fn ) {
     ClusterGraph _cg;
 
     // Copy factors
@@ -535,11 +531,11 @@ std::pair<size_t,size_t> treewidth( const FactorGraph & fg ) {
     _cg.eraseNonMaximal();
 
     // Obtain elimination sequence
-    vector<VarSet> ElimVec = _cg.VarElim_MinFill().eraseNonMaximal().toVector();
+    vector<VarSet> ElimVec = _cg.VarElim( greedyVariableElimination( fn ) ).eraseNonMaximal().toVector();
 
     // Calculate treewidth
     size_t treewidth = 0;
-    size_t nrstates = 0;
+    double nrstates = 0.0;
     for( size_t i = 0; i < ElimVec.size(); i++ ) {
         if( ElimVec[i].size() > treewidth )
             treewidth = ElimVec[i].size();
@@ -548,7 +544,7 @@ std::pair<size_t,size_t> treewidth( const FactorGraph & fg ) {
             nrstates = s;
     }
 
-    return pair<size_t,size_t>(treewidth, nrstates);
+    return make_pair(treewidth, nrstates);
 }
 
 

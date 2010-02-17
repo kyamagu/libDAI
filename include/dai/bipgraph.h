@@ -10,7 +10,7 @@
 
 
 /// \file
-/// \brief Defines the BipartiteGraph class
+/// \brief Defines the BipartiteGraph class, which represents a bipartite graph
 
 
 #ifndef __defined_libdai_bipgraph_h
@@ -29,9 +29,9 @@ namespace dai {
 
 /// Represents the neighborhood structure of nodes in an undirected, bipartite graph.
 /** A bipartite graph has two types of nodes: type 1 and type 2. Edges can occur only between
- *  nodes of different type. Nodes are indexed by an unsigned integer. If there are nr1()
- *  nodes of type 1 and nr2() nodes of type 2, the nodes of type 1 are numbered
- *  0,1,2,...,nr1()-1 and the nodes of type 2 are numbered 0,1,2,...,nr2()-1. An edge
+ *  nodes of different type. Nodes are indexed by an unsigned integer. If there are nrNodes1()
+ *  nodes of type 1 and nrNodes2() nodes of type 2, the nodes of type 1 are numbered
+ *  0,1,2,...,nrNodes1()-1 and the nodes of type 2 are numbered 0,1,2,...,nrNodes2()-1. An edge
  *  between node \a n1 of type 1 and node \a n2 of type 2 is represented by a BipartiteGraph::Edge(\a n1,\a n2).
  *
  *  A BipartiteGraph is implemented as a sparse adjacency list, i.e., it stores for each node a list of
@@ -133,41 +133,32 @@ class BipartiteGraph {
 
         /// Used internally by isTree()
         struct levelType {
-            std::vector<size_t> ind1;       // indices of nodes of type 1
-            std::vector<size_t> ind2;       // indices of nodes of type 2
+            /// Indices of nodes of type 1
+            std::vector<size_t> ind1;       
+            /// Indices of nodes of type 2
+            std::vector<size_t> ind2;
         };
 
-        // OBSOLETE
-        /// @name Backwards compatibility layer (to be removed soon)
-        //@{
-        /// Enable backwards compatibility layer?
-        bool _edge_indexed;
-        /// Call indexEdges() first to initialize these members
-        std::vector<Edge> _edges;
-        /// Call indexEdges() first to initialize these members
-        hash_map<Edge,size_t> _vv2e;
-        //@}
-
     public:
-    /// @name Constructors and destructors
+    /// \name Constructors and destructors
     //@{
         /// Default constructor (creates an empty bipartite graph)
-        BipartiteGraph() : _nb1(), _nb2(), _edge_indexed(false) {}
+        BipartiteGraph() : _nb1(), _nb2() {}
 
         /// Constructs BipartiteGraph from a range of edges.
         /** \tparam EdgeInputIterator Iterator that iterates over instances of BipartiteGraph::Edge.
-         *  \param nr1 The number of nodes of type 1.
-         *  \param nr2 The number of nodes of type 2.
+         *  \param nrNodes1 The number of nodes of type 1.
+         *  \param nrNodes2 The number of nodes of type 2.
          *  \param begin Points to the first edge.
          *  \param end Points just beyond the last edge.
          */
         template<typename EdgeInputIterator>
-        BipartiteGraph( size_t nr1, size_t nr2, EdgeInputIterator begin, EdgeInputIterator end ) : _nb1( nr1 ), _nb2( nr2 ), _edge_indexed(false) {
-            construct( nr1, nr2, begin, end );
+        BipartiteGraph( size_t nrNodes1, size_t nrNodes2, EdgeInputIterator begin, EdgeInputIterator end ) : _nb1(), _nb2() {
+            construct( nrNodes1, nrNodes2, begin, end );
         }
     //@}
 
-    /// @name Accessors and mutators
+    /// \name Accessors and mutators
     //@{
         /// Returns constant reference to the \a _i2 'th neighbor of node \a i1 of type 1
         const Neighbor & nb1( size_t i1, size_t _i2 ) const {
@@ -218,23 +209,24 @@ class BipartiteGraph {
         }
     //@}
 
-    /// @name Adding nodes and edges
+    /// \name Adding nodes and edges
     //@{
         /// (Re)constructs BipartiteGraph from a range of edges.
         /** \tparam EdgeInputIterator Iterator that iterates over instances of BipartiteGraph::Edge.
-         *  \param nr1 The number of nodes of type 1.
-         *  \param nr2 The number of nodes of type 2.
+         *  \param nrNodes1 The number of nodes of type 1.
+         *  \param nrNodes2 The number of nodes of type 2.
          *  \param begin Points to the first edge.
          *  \param end Points just beyond the last edge.
          */
         template<typename EdgeInputIterator>
-        void construct( size_t nr1, size_t nr2, EdgeInputIterator begin, EdgeInputIterator end );
+        void construct( size_t nrNodes1, size_t nrNodes2, EdgeInputIterator begin, EdgeInputIterator end );
 
         /// Adds a node of type 1 without neighbors and returns the index of the added node.
-        size_t add1() { _nb1.push_back( Neighbors() ); return _nb1.size() - 1; }
+        size_t addNode1() { _nb1.push_back( Neighbors() ); return _nb1.size() - 1; }
 
         /// Adds a node of type 2 without neighbors and returns the index of the added node.
-        size_t add2() { _nb2.push_back( Neighbors() ); return _nb2.size() - 1; }
+        size_t addNode2() { _nb2.push_back( Neighbors() ); return _nb2.size() - 1; }
+
 
         /// Adds a node of type 1, with neighbors specified by a range of nodes of type 2.
         /** \tparam NodeInputIterator Iterator that iterates over instances of \c size_t.
@@ -244,14 +236,14 @@ class BipartiteGraph {
          *  \returns Index of the added node.
          */
         template <typename NodeInputIterator>
-        size_t add1( NodeInputIterator begin, NodeInputIterator end, size_t sizeHint = 0 ) {
+        size_t addNode1( NodeInputIterator begin, NodeInputIterator end, size_t sizeHint = 0 ) {
             Neighbors nbs1new;
             nbs1new.reserve( sizeHint );
             size_t iter = 0;
             for( NodeInputIterator it = begin; it != end; ++it ) {
-                DAI_ASSERT( *it < nr2() );
+                DAI_ASSERT( *it < nrNodes2() );
                 Neighbor nb1new( iter, *it, nb2(*it).size() );
-                Neighbor nb2new( nb2(*it).size(), nr1(), iter++ );
+                Neighbor nb2new( nb2(*it).size(), nrNodes1(), iter++ );
                 nbs1new.push_back( nb1new );
                 nb2( *it ).push_back( nb2new );
             }
@@ -267,14 +259,14 @@ class BipartiteGraph {
          *  \returns Index of the added node.
          */
         template <typename NodeInputIterator>
-        size_t add2( NodeInputIterator begin, NodeInputIterator end, size_t sizeHint = 0 ) {
+        size_t addNode2( NodeInputIterator begin, NodeInputIterator end, size_t sizeHint = 0 ) {
             Neighbors nbs2new;
             nbs2new.reserve( sizeHint );
             size_t iter = 0;
             for( NodeInputIterator it = begin; it != end; ++it ) {
-                DAI_ASSERT( *it < nr1() );
+                DAI_ASSERT( *it < nrNodes1() );
                 Neighbor nb2new( iter, *it, nb1(*it).size() );
-                Neighbor nb1new( nb1(*it).size(), nr2(), iter++ );
+                Neighbor nb1new( nb1(*it).size(), nrNodes2(), iter++ );
                 nbs2new.push_back( nb2new );
                 nb1( *it ).push_back( nb1new );
             }
@@ -288,29 +280,29 @@ class BipartiteGraph {
         void addEdge( size_t n1, size_t n2, bool check = true );
     //@}
 
-    /// @name Erasing nodes and edges
+    /// \name Erasing nodes and edges
     //@{
         /// Removes node \a n1 of type 1 and all incident edges; indices of other nodes are changed accordingly.
-        void erase1( size_t n1 );
+        void eraseNode1( size_t n1 );
 
         /// Removes node \a n2 of type 2 and all incident edges; indices of other nodes are changed accordingly.
-        void erase2( size_t n2 );
+        void eraseNode2( size_t n2 );
 
         /// Removes edge between node \a n1 of type 1 and node \a n2 of type 2.
         void eraseEdge( size_t n1, size_t n2 );
     //@}
 
-    /// @name Queries
+    /// \name Queries
     //@{
         /// Returns number of nodes of type 1
-        size_t nr1() const { return _nb1.size(); }
+        size_t nrNodes1() const { return _nb1.size(); }
         /// Returns number of nodes of type 2
-        size_t nr2() const { return _nb2.size(); }
+        size_t nrNodes2() const { return _nb2.size(); }
 
-        /// Calculates the number of edges, time complexity: O(nr1())
+        /// Calculates the number of edges, time complexity: O(nrNodes1())
         size_t nrEdges() const {
             size_t sum = 0;
-            for( size_t i1 = 0; i1 < nr1(); i1++ )
+            for( size_t i1 = 0; i1 < nrNodes1(); i1++ )
                 sum += nb1(i1).size();
             return sum;
         }
@@ -326,8 +318,6 @@ class BipartiteGraph {
         std::vector<size_t> delta2( size_t n2, bool include = false ) const;
 
         /// Returns true if the graph is connected
-        /** \todo Should be optimized by invoking boost::graph library
-         */
         bool isConnected() const;
 
         /// Returns true if the graph is a tree, i.e., if it is singly connected and connected.
@@ -337,68 +327,20 @@ class BipartiteGraph {
         void checkConsistency() const;
     //@}
 
-    /// @name Input and output
+    /// \name Input and output
     //@{
         /// Writes this BipartiteGraph to an output stream in GraphViz .dot syntax
         void printDot( std::ostream& os ) const;
-    //@}
-
-        // OBSOLETE
-    /// @name Backwards compatibility layer (to be removed soon)
-    //@{
-        void indexEdges() {
-            std::cerr << "Warning: this BipartiteGraph edge interface is obsolete!" << std::endl;
-            _edges.clear();
-            _vv2e.clear();
-            size_t i=0;
-            foreach(const Neighbors &nb1s, _nb1) {
-                foreach(const Neighbor &n2, nb1s) {
-                    Edge e(i, n2.node);
-                    _edges.push_back(e);
-                }
-                i++;
-            }
-            sort(_edges.begin(), _edges.end()); // unnecessary?
-
-            i=0;
-            foreach(const Edge& e, _edges) {
-                _vv2e[e] = i++;
-            }
-
-            _edge_indexed = true;
-        }
-
-        const Edge& edge(size_t e) const {
-            DAI_ASSERT(_edge_indexed);
-            return _edges[e];
-        }
-
-        const std::vector<Edge>& edges() const {
-            return _edges;
-        }
-
-        size_t VV2E(size_t n1, size_t n2) const {
-            DAI_ASSERT(_edge_indexed);
-            Edge e(n1,n2);
-            hash_map<Edge,size_t>::const_iterator i = _vv2e.find(e);
-            DAI_ASSERT(i != _vv2e.end());
-            return i->second;
-        }
-
-        size_t nr_edges() const {
-            DAI_ASSERT(_edge_indexed);
-            return _edges.size();
-        }
     //@}
 };
 
 
 template<typename EdgeInputIterator>
-void BipartiteGraph::construct( size_t nr1, size_t nr2, EdgeInputIterator begin, EdgeInputIterator end ) {
+void BipartiteGraph::construct( size_t nrNodes1, size_t nrNodes2, EdgeInputIterator begin, EdgeInputIterator end ) {
     _nb1.clear();
-    _nb1.resize( nr1 );
+    _nb1.resize( nrNodes1 );
     _nb2.clear();
-    _nb2.resize( nr2 );
+    _nb2.resize( nrNodes2 );
 
     for( EdgeInputIterator e = begin; e != end; e++ ) {
 #ifdef DAI_DEBUG

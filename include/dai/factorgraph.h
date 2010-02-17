@@ -10,7 +10,7 @@
 
 
 /// \file
-/// \brief Defines the FactorGraph class
+/// \brief Defines the FactorGraph class, which represents factor graphs (e.g., Bayesian networks or Markov random fields)
 
 
 #ifndef __defined_libdai_factorgraph_h
@@ -55,10 +55,12 @@ namespace dai {
  *  So basically, a FactorGraph consists of a BipartiteGraph, a vector of Var 's
  *  and a vector of TFactor 's.
  *
- *  \todo Alternative implementation of undo factor changes: the only things that have to be
+ *  \idea Alternative implementation of undo factor changes: the only things that have to be
  *  undone currently are setting a factor to 1 and setting a factor to a Kronecker delta. This
  *  could also be implemented in the TFactor itself, which could maintain its state
- *  (ones/delta/full) and act accordingly.
+ *  (ones/delta/full) and act accordingly. Update: it seems that the proposed functionality 
+ *  would not be enough for CBP, for which it would make more sense to add more levels of
+ *  backup/restore.
  */ 
 class FactorGraph {
     public:
@@ -246,18 +248,24 @@ class FactorGraph {
         }
 
         /// Makes a backup of the \a I 'th factor
+        /** \throw MULTIPLE_UNDO if a backup already exists
+         */
         void backupFactor( size_t I );
 
         /// Restores the \a I 'th factor from the backup (it should be backed up first)
         void restoreFactor( size_t I );
 
         /// Backup the factors specified by indices in \a facs
+        /** \throw MULTIPLE_UNDO if a backup already exists
+         */
         virtual void backupFactors( const std::set<size_t> & facs );
 
         /// Restore all factors to the backup copies
         virtual void restoreFactors();
 
         /// Makes a backup of all factors connected to a set of variables
+        /** \throw MULTIPLE_UNDO if a backup already exists
+         */
         void backupFactors( const VarSet &ns );
 
         /// Restores all factors connected to a set of variables from their backups
@@ -269,18 +277,11 @@ class FactorGraph {
         /// Returns a copy of \c *this, where all factors that are subsumed by some larger factor are merged with the larger factors.
         FactorGraph maximalFactors() const;
 
-        /// Clamp the \a i 'th variable to value \a x (i.e. multiply with a Kronecker delta \f$\delta_{x_v,x}\f$);
+        /// Clamp the \a i 'th variable to value \a x (i.e. multiply with a Kronecker delta \f$\delta_{x_i,x}\f$);
         /** \note This version changes the factor graph structure and thus returns a newly constructed FactorGraph
          *  and keeps the current one constant, contrary to clamp()
          */
         FactorGraph clamped( size_t i, size_t x ) const;
-
-        // OBSOLETE
-        /// Only for backwards compatibility (to be removed soon)
-        FactorGraph clamped( const Var &v, size_t x ) const {
-            std::cerr << "Warning: this FactorGraph::clamped(const Var&,...) interface is obsolete!" << std::endl;
-            return clamped( findVar(v), x );
-        }
     //@}
 
     /// \name Operations
@@ -289,13 +290,6 @@ class FactorGraph {
         /** If \a backup == \c true, make a backup of all factors that are changed
          */
         virtual void clamp( size_t i, size_t x, bool backup = false );
-
-        // OBSOLETE
-        /// Only for backwards compatibility (to be removed soon)
-        virtual void clamp( const Var &v, size_t x, bool backup = false ) {
-            std::cerr << "Warning: this FactorGraph::clamp(const Var&,...) interface is obsolete!" << std::endl;
-            clamp( findVar(v), x, backup );
-        }
 
         /// Clamp a variable in a factor graph to have one out of a list of values
         /** If \a backup == \c true, make a backup of all factors that are changed
@@ -316,37 +310,31 @@ class FactorGraph {
     /// \name Input/Output
     //@{
         /// Reads a factor graph from a file
-        /** \see \ref fileformat
+        /** \see \ref fileformats-factorgraph
+         *  \throw CANNOT_READ_FILE if the file cannot be opened
+         *  \throw INVALID_FACTORGRAPH_FILE if the file is not valid
          */
         void ReadFromFile( const char *filename );
 
         /// Writes a factor graph to a file
-        /** \see \ref fileformat
+        /** \see \ref fileformats-factorgraph
+         *  \throw CANNOT_WRITE_FILE if the file cannot be written
          */
         void WriteToFile( const char *filename, size_t precision=15 ) const;
 
         /// Writes a factor graph to an output stream
-        /** \see \ref fileformat
+        /** \see \ref fileformats-factorgraph
          */
         friend std::ostream& operator<< (std::ostream &os, const FactorGraph &fg );
 
         /// Reads a factor graph from an input stream
-        /** \see \ref fileformat
+        /** \see \ref fileformats-factorgraph
+         *  \throw INVALID_FACTORGRAPH_FILE if the input stream is not valid
          */
         friend std::istream& operator>> (std::istream &is, FactorGraph &fg );
 
         /// Writes a factor graph to a GraphViz .dot file
         void printDot( std::ostream& os ) const;
-    //@}
-
-        // OBSOLETE
-    /// \name Backwards compatibility layer (to be removed soon)
-    //@{
-        size_t VV2E(size_t n1, size_t n2) const { return G.VV2E(n1,n2); }
-        const Edge& edge(size_t e) const { return G.edge(e); }
-        void indexEdges() { G.indexEdges(); }
-        size_t nr_edges() const { return G.nr_edges(); }
-        const std::vector<Edge>& edges() const { return G.edges(); }
     //@}
 
     private:
@@ -373,6 +361,19 @@ FactorGraph::FactorGraph(FactorInputIterator fact_begin, FactorInputIterator fac
     // create graph structure
     constructGraph( nrEdges );
 }
+
+
+/** \example example.cpp
+ *  This example illustrates how to read a factor graph from a file and how to
+ *  run several inference algorithms (junction tree, loopy belief propagation,
+ *  and the max-product algorithm) on it.
+ */
+
+
+/** \example example_sprinkler.cpp
+ *  This example illustrates how to manually construct a factor graph and
+ *  write it to a file.
+ */
 
 
 } // end of namespace dai

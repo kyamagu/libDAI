@@ -10,7 +10,7 @@
 
 
 /// \file
-/// \brief Defines classes Region, FRegion and RegionGraph.
+/// \brief Defines classes Region, FRegion and RegionGraph, which implement a particular subclass of region graphs.
 
 
 #ifndef __defined_libdai_regiongraph_h
@@ -37,7 +37,7 @@ class Region : public VarSet {
         Region() : VarSet(), _c(1.0) {}
 
         /// Construct from a set of variables and a counting number
-        Region(const VarSet &x, Real c) : VarSet(x), _c(c) {}
+        Region( const VarSet &x, Real c ) : VarSet(x), _c(c) {}
 
         /// Returns constant reference to counting number
         const Real & c() const { return _c; }
@@ -111,7 +111,14 @@ class RegionGraph : public FactorGraph {
         /// Constructs a region graph from a factor graph, a vector of outer regions, a vector of inner regions and a vector of edges
         /** The counting numbers for the outer regions are set to 1.
          */
-        RegionGraph( const FactorGraph &fg, const std::vector<Region> &ors, const std::vector<Region> &irs, const std::vector<std::pair<size_t,size_t> > &edges );
+        RegionGraph( const FactorGraph &fg, const std::vector<VarSet> &ors, const std::vector<Region> &irs, const std::vector<std::pair<size_t,size_t> > &edges ) : FactorGraph(), G(), ORs(), IRs(), fac2OR() {
+            construct( fg, ors, irs, edges );
+
+            // Check counting numbers
+#ifdef DAI_DEBUG
+            checkCountingNumbers();
+#endif
+        }
 
         /// Constructs a region graph from a factor graph and a vector of outer clusters (CVM style)
         /** The region graph is constructed as in the Cluster Variation Method. 
@@ -125,7 +132,14 @@ class RegionGraph : public FactorGraph {
          *  subset of the variables in the outer region. The counting numbers for the inner
          *  regions are calculated by calcCountingNumbers() and satisfy the Moebius formula.
          */
-        RegionGraph( const FactorGraph &fg, const std::vector<VarSet> &cl );
+        RegionGraph( const FactorGraph &fg, const std::vector<VarSet> &cl ) : FactorGraph(), G(), ORs(), IRs(), fac2OR() {
+            constructCVM( fg, cl );
+
+            // Check counting numbers
+#ifdef DAI_DEBUG
+            checkCountingNumbers();
+#endif
+        }
 
         /// Clone \c *this (virtual copy constructor)
         virtual RegionGraph* clone() const { return new RegionGraph(*this); }
@@ -160,10 +174,6 @@ class RegionGraph : public FactorGraph {
          *  that contain the variable equals one.
          */
         bool checkCountingNumbers() const;
-
-        // OBSOLETE
-        /// For backwards compatibility (to be removed soon)
-        bool Check_Counting_Numbers() { return checkCountingNumbers(); }
     //@}
 
     /// \name Operations
@@ -206,10 +216,6 @@ class RegionGraph : public FactorGraph {
          *  region if its variables are a subset of the variables of its parent region).
          */
         void calcCountingNumbers();
-
-        // OBSOLETE
-        /// For backwards compatibility (to be removed soon)
-        void Calc_Counting_Numbers() { calcCountingNumbers(); }
     //@}
 
     /// \name Input/output
@@ -217,6 +223,13 @@ class RegionGraph : public FactorGraph {
         /// Writes a RegionGraph to an output stream
         friend std::ostream & operator << ( std::ostream & os, const RegionGraph & rg );
     //@}
+
+    protected:
+        /// Helper function for constructors
+        void construct( const FactorGraph &fg, const std::vector<VarSet> &ors, const std::vector<Region> &irs, const std::vector<std::pair<size_t,size_t> > &edges );
+
+        /// Helper function for constructors (CVM style)
+        void constructCVM( const FactorGraph &fg, const std::vector<VarSet> &cl );
 };
 
 

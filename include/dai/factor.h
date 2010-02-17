@@ -51,7 +51,7 @@ namespace dai {
  *  ordering, which is defined by the one-to-one correspondence of a joint state
  *  in \f$\prod_{l\in L} X_l\f$ with a linear index in
  *  \f$\{0,1,\dots,\prod_{l\in L} S_l-1\}\f$ according to the mapping \f$\sigma\f$
- *  induced by VarSet::calcState(const std::map<Var,size_t> &).
+ *  induced by dai::calcLinearState().
  *
  *  \tparam T Should be a scalar that is castable from and to double and should support elementary arithmetic operations.
  *  \todo Define a better fileformat for .fg files (maybe using XML)?
@@ -194,7 +194,7 @@ template <typename T> class TFactor {
             x._p = _p.log(zero);
             return x;
         }
-
+        
         /// Returns pointwise inverse
         /** If \a zero == \c true, uses <tt>1/0==0</tt>; otherwise, <tt>1/0==Inf</tt>.
          */
@@ -206,6 +206,8 @@ template <typename T> class TFactor {
         }
 
         /// Returns normalized copy of \c *this, using the specified norm
+        /** \throw NOT_NORMALIZABLE if the norm is zero
+         */
         TFactor<T> normalized( typename TProb<T>::NormType norm=TProb<T>::NORMPROB ) const {
             TFactor<T> x;
             x._vs = _vs;
@@ -223,6 +225,8 @@ template <typename T> class TFactor {
         TFactor<T>& setUniform () { _p.setUniform(); return *this; }
 
         /// Normalizes factor using the specified norm
+        /** \throw NOT_NORMALIZABLE if the norm is zero
+         */
         T normalize( typename TProb<T>::NormType norm=TProb<T>::NORMPROB ) { return _p.normalize( norm ); }
     //@}
 
@@ -230,18 +234,6 @@ template <typename T> class TFactor {
     //@{
         /// Sets all values to \a x
         TFactor<T> & fill (T x) { _p.fill( x ); return *this; }
-
-        // OBSOLETE
-        /// Sets values that are smaller (in absolute value) than \a epsilon to 0
-        /** \note Obsolete, to be removed soon
-         */
-        TFactor<T>& makeZero( T epsilon ) { _p.makeZero( epsilon ); return *this; }
-
-        // OBSOLETE
-        /// Sets values that are smaller than \a epsilon to \a epsilon
-        /** \note Obsolete, to be removed soon
-         */
-        TFactor<T>& makePositive( T epsilon ) { _p.makePositive( epsilon ); return *this; }
 
         /// Adds scalar \a x to each value
         TFactor<T>& operator+= (T x) { _p += x; return *this; }
@@ -607,6 +599,45 @@ template<typename T> T MutualInfo(const TFactor<T> &f) {
 typedef TFactorSpV<Real> Factor;
 //typedef TFactorSp<Real> Factor;
 //typedef TFactor<Real> Factor;
+
+
+/// Returns a binary single-variable factor \f$ \exp(hx) \f$ where \f$ x = \pm 1 \f$
+/** \param x Variable (should be binary)
+ *  \param h Field strength
+ */
+Factor createFactorIsing( const Var &x, Real h );
+
+
+/// Returns a binary pairwise factor \f$ \exp(J x_1 x_2) \f$ where \f$ x_1, x_2 = \pm 1 \f$
+/** \param x1 First variable (should be binary)
+ *  \param x2 Second variable (should be binary)
+ *  \param J Coupling strength
+ */
+Factor createFactorIsing( const Var &x1, const Var &x2, Real J );
+
+
+/// Returns a random factor on the variables \a vs with strength \a beta
+/** Each entry are set by drawing a normally distributed random with mean
+ *  0 and standard-deviation \a beta, and taking its exponent.
+ *  \param vs Variables
+ *  \param beta Factor strength (inverse temperature)
+ */
+Factor createFactorExpGauss( const VarSet &vs, Real beta );
+
+
+/// Returns a pairwise Potts factor \f$ \exp( J \delta_{x_1, x_2} ) \f$
+/** \param x1 First variable
+ *  \param x2 Second variable (should have the same number of states as \a x1)
+ *  \param J  Factor strength
+ */
+Factor createFactorPotts( const Var &x1, const Var &x2, Real J );
+
+
+/// Returns a Kronecker delta point mass
+/** \param v Variable
+ *  \param state The state of \a v that should get value 1
+ */
+Factor createFactorDelta( const Var &v, size_t state );
 
 
 } // end of namespace dai

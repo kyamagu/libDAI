@@ -4,14 +4,15 @@
  *  2, or (at your option) any later version. libDAI is distributed without any
  *  warranty. See the file COPYING for more details.
  *
- *  Copyright (C) 2006-2009  Joris Mooij  [joris dot mooij at libdai dot org]
+ *  Copyright (C) 2006-2010  Joris Mooij  [joris dot mooij at libdai dot org]
  *  Copyright (C) 2006-2007  Radboud University Nijmegen, The Netherlands
  */
 
 
 /// \file
-/// \brief Defines class TreeEP
-/// \todo Improve documentation
+/// \brief Defines class TreeEP, which implements Tree Expectation Propagation
+/// \todo Clean up the TreeEP code (exploiting that a large part of the code
+/// is just a special case of JTree).
 
 
 #ifndef __defined_libdai_treeep_h
@@ -34,7 +35,7 @@
 namespace dai {
 
 
-/// Approximate inference algorithm "TreeEP" by Minka and Qi
+/// Approximate inference algorithm "Tree Expectation Propagation" [\ref MiQ04]
 class TreeEP : public JTree {
     private:
         /// Maximum difference encountered so far
@@ -43,45 +44,70 @@ class TreeEP : public JTree {
         size_t                _iters;
 
     public:
-        /// Parameters of this inference algorithm
+        /// Parameters for TreeEP
         struct Properties {
             /// Enumeration of possible choices for the tree
-            DAI_ENUM(TypeType,ORG,ALT)
+            /** The two possibilities are:
+             *  - \c ORG: take the maximum spanning tree where the weights are crude
+             *            estimates of the mutual information between the nodes;
+             *  - \c ALT: take the maximum spanning tree where the weights are upper
+             *            bounds on the effective interaction strengths between pairs of nodes.
+             */
+            DAI_ENUM(TypeType,ORG,ALT);
 
-            /// Verbosity
+            /// Verbosity (amount of output sent to stderr)
             size_t verbose;
 
             /// Maximum number of iterations
             size_t maxiter;
 
-            /// Tolerance
+            /// Tolerance for convergence test
             Real tol;
 
             /// How to choose the tree
             TypeType type;
-        } props; // FIXME: should be props2 because of conflict with JTree::props?
+        } props;
 
         /// Name of this inference method
         static const char *Name;
 
     private:
+        /// Stores the data structures needed to efficiently update the approximation of an off-tree factor.
+        /** The TreeEP object stores a TreeEPSubTree object for each off-tree factor.
+         *  It stores the approximation of that off-tree factor, which is represented 
+         *  as a distribution on a subtree of the main tree.
+         */
         class TreeEPSubTree {
             private:
+                /// Outer region pseudomarginals (corresponding with the \f$\tilde f_i(x_j,x_k)\f$ in [\ref MiQ04])
                 std::vector<Factor>  _Qa;
+                /// Inner region pseudomarginals (corresponding with the \f$\tilde f_i(x_s)\f$ in [\ref MiQ04])
                 std::vector<Factor>  _Qb;
-                DEdgeVec             _RTree;
-                std::vector<size_t>  _a;        // _Qa[alpha]  <->  superTree.Qa[_a[alpha]]
-                std::vector<size_t>  _b;        // _Qb[beta]   <->  superTree.Qb[_b[beta]]
-                                                // _Qb[beta]   <->  _RTree[beta]
+                /// The junction tree (stored as a rooted tree)
+                RootedTree           _RTree;
+                /// Index conversion table for outer region indices (_Qa[alpha] corresponds with Qa[_a[alpha]] of the supertree)
+                std::vector<size_t>  _a;        
+                /// Index conversion table for inner region indices (_Qb[beta] corresponds with Qb[_b[beta]] of the supertree)
+                std::vector<size_t>  _b;
+                /// Pointer to off-tree factor
                 const Factor *       _I;
+                /// Variables in off-tree factor
                 VarSet               _ns;
+                /// Variables in off-tree factor which are not in the root of this subtree
                 VarSet               _nsrem;
+                /// Used for calculating the free energy
                 Real                 _logZ;
 
-
             public:
+            /// \name Constructors/destructors
+            //@{
+                /// Default constructor
                 TreeEPSubTree() : _Qa(), _Qb(), _RTree(), _a(), _b(), _I(NULL), _ns(), _nsrem(), _logZ(0.0) {}
-                TreeEPSubTree( const TreeEPSubTree &x) : _Qa(x._Qa), _Qb(x._Qb), _RTree(x._RTree), _a(x._a), _b(x._b), _I(x._I), _ns(x._ns), _nsrem(x._nsrem), _logZ(x._logZ) {}
+
+                /// Copy constructor
+                TreeEPSubTree( const TreeEPSubTree &x ) : _Qa(x._Qa), _Qb(x._Qb), _RTree(x._RTree), _a(x._a), _b(x._b), _I(x._I), _ns(x._ns), _nsrem(x._nsrem), _logZ(x._logZ) {}
+
+                /// Assignment operator
                 TreeEPSubTree & operator=( const TreeEPSubTree& x ) {
                     if( this != &x ) {
                         _Qa         = x._Qa;
@@ -97,14 +123,27 @@ class TreeEP : public JTree {
                     return *this;
                 }
 
-                TreeEPSubTree( const DEdgeVec &subRTree, const DEdgeVec &jt_RTree, const std::vector<Factor> &jt_Qa, const std::vector<Factor> &jt_Qb, const Factor *I );
+                /// Construct from \a subRTree, which is a subtree of the main tree \a jt_RTree, with distribution represented by \a jt_Qa and \a jt_Qb, for off-tree factor \a I
+                TreeEPSubTree( const RootedTree &subRTree, const RootedTree &jt_RTree, const std::vector<Factor> &jt_Qa, const std::vector<Factor> &jt_Qb, const Factor *I );
+            //@}
+
+                /// Initializes beliefs of this subtree
                 void init();
+
+                /// Inverts this approximation and multiplies it by the (super) junction tree marginals \a Qa and \a Qb
                 void InvertAndMultiply( const std::vector<Factor> &Qa, const std::vector<Factor> &Qb );
+
+                /// Runs junction tree algorithm (including off-tree factor I) storing the results in the (super) junction tree \a Qa and \a Qb
                 void HUGIN_with_I( std::vector<Factor> &Qa, std::vector<Factor> &Qb );
+
+                /// Returns energy (?) of this subtree
                 Real logZ( const std::vector<Factor> &Qa, const std::vector<Factor> &Qb ) const;
+
+                /// Returns constant reference to the pointer to the off-tree factor
                 const Factor *& I() { return _I; }
         };
 
+        /// Stores a TreeEPSubTree object for each off-tree factor
         std::map<size_t, TreeEPSubTree>  _Q;
 
     public:
@@ -133,12 +172,16 @@ class TreeEP : public JTree {
             return *this;
         }
 
-        /// Construct from FactorGraph fg and PropertySet opts
+        /// Construct from FactorGraph \a fg and PropertySet \a opts
+        /** \param opts Parameters @see Properties
+         *  \note The factor graph has to be connected.
+         *  \throw FACTORGRAPH_NOT_CONNECTED if \a fg is not connected
+         */
         TreeEP( const FactorGraph &fg, const PropertySet &opts );
 
 
-        /// @name General InfAlg interface
-        //@{
+    /// \name General InfAlg interface
+    //@{
         virtual TreeEP* clone() const { return new TreeEP(*this); }
         virtual std::string identify() const;
         virtual Real logZ() const;
@@ -147,20 +190,16 @@ class TreeEP : public JTree {
         virtual Real run();
         virtual Real maxDiff() const { return _maxdiff; }
         virtual size_t Iterations() const { return _iters; }
-        //@}
-
-
-        /// @name Additional interface specific for TreeEP
-        //@{
-        //@}
+        virtual void setProperties( const PropertySet &opts );
+        virtual PropertySet getProperties() const;
+        virtual std::string printProperties() const;
+    //@}
 
     private:
-        void ConstructRG( const DEdgeVec &tree );
+        /// Helper function for constructors
+        void construct( const RootedTree &tree );
+        /// Returns \c true if factor \a I is not part of the tree
         bool offtree( size_t I ) const { return (fac2OR[I] == -1U); }
-
-        void setProperties( const PropertySet &opts );
-        PropertySet getProperties() const;
-        std::string printProperties() const;
 };
 
 

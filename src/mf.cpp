@@ -4,7 +4,7 @@
  *  2, or (at your option) any later version. libDAI is distributed without any
  *  warranty. See the file COPYING for more details.
  *
- *  Copyright (C) 2006-2009  Joris Mooij  [joris dot mooij at libdai dot org]
+ *  Copyright (C) 2006-2010  Joris Mooij  [joris dot mooij at libdai dot org]
  *  Copyright (C) 2006-2007  Radboud University Nijmegen, The Netherlands
  */
 
@@ -84,88 +84,94 @@ void MF::init() {
 }
 
 
-Real MF::run() {
-    double tic = toc();
+Factor MF::calcNewBelief( size_t i ) {
+    Factor result;
+    foreach( const Neighbor &I, nbV(i) ) {
+        Factor henk;
+        foreach( const Neighbor &j, nbF(I) ) // for all j in I \ i
+            if( j != i )
+                henk *= _beliefs[j];
+        Factor piet = factor(I).log(true);
+        piet *= henk;
+        piet = piet.marginal(var(i), false);
+        piet = piet.exp();
+        result *= piet;
+    }
+    result.normalize();
+    return result;
+}
 
+
+Real MF::run() {
     if( props.verbose >= 1 )
         cerr << "Starting " << identify() << "...";
 
-    size_t pass_size = _beliefs.size();
-    Diffs diffs(pass_size * 3, 1.0);
+    double tic = toc();
 
-    size_t t=0;
-    for( t=0; t < (props.maxiter*pass_size) && diffs.maxDiff() > props.tol; t++ ) {
-        // choose random Var i
-        size_t i = (size_t) (nrVars() * rnd_uniform());
+    vector<size_t> update_seq;
+    update_seq.reserve( nrVars() );
+    for( size_t i = 0; i < nrVars(); i++ )
+        update_seq.push_back( i );
 
-        Factor jan;
-        Factor piet;
-        foreach( const Neighbor &I, nbV(i) ) {
-            Factor henk;
-            foreach( const Neighbor &j, nbF(I) ) // for all j in I \ i
-                if( j != i )
-                    henk *= _beliefs[j];
-            piet = factor(I).log(true);
-            piet *= henk;
-            piet = piet.marginal(var(i), false);
-            piet = piet.exp();
-            jan *= piet;
+    // do several passes over the network until maximum number of iterations has
+    // been reached or until the maximum belief difference is smaller than tolerance
+    Real maxDiff = INFINITY;
+    for( _iters = 0; _iters < props.maxiter && maxDiff > props.tol; _iters++ ) {
+        random_shuffle( update_seq.begin(), update_seq.end() );
+
+        maxDiff = -INFINITY;
+        foreach( const size_t &i, update_seq ) {
+            Factor nb = calcNewBelief( i );
+
+            if( nb.hasNaNs() ) {
+                cerr << Name << "::run():  ERROR: new belief of variable " << var(i) << " has NaNs!" << endl;
+                return 1.0;
+            }
+
+            if( props.damping != 0.0 )
+                nb = (nb^(1.0 - props.damping)) * (_beliefs[i]^props.damping);
+
+            maxDiff = std::max( maxDiff, dist( nb, _beliefs[i], Prob::DISTLINF ) );
+            _beliefs[i] = nb;
         }
 
-        jan.normalize();
-
-        if( jan.hasNaNs() ) {
-            cerr << Name << "::run():  ERROR: jan has NaNs!" << endl;
-            return 1.0;
-        }
-
-        if( props.damping != 0.0 )
-            jan = (jan^(1.0 - props.damping)) * (_beliefs[i]^props.damping);
-        diffs.push( dist( jan, _beliefs[i], Prob::DISTLINF ) );
-
-        _beliefs[i] = jan;
+        if( props.verbose >= 3 )
+            cerr << Name << "::run:  maxdiff " << maxDiff << " after " << _iters+1 << " passes" << endl;
     }
 
-    _iters = t / pass_size;
-    if( diffs.maxDiff() > _maxdiff )
-        _maxdiff = diffs.maxDiff();
+    if( maxDiff > _maxdiff )
+        _maxdiff = maxDiff;
 
     if( props.verbose >= 1 ) {
-        if( diffs.maxDiff() > props.tol ) {
+        if( maxDiff > props.tol ) {
             if( props.verbose == 1 )
                 cerr << endl;
-            cerr << Name << "::run:  WARNING: not converged within " << props.maxiter << " passes (" << toc() - tic << " seconds)...final maxdiff:" << diffs.maxDiff() << endl;
+            cerr << Name << "::run:  WARNING: not converged within " << props.maxiter << " passes (" << toc() - tic << " seconds)...final maxdiff:" << maxDiff << endl;
         } else {
-            if( props.verbose >= 2 )
+            if( props.verbose >= 3 )
                 cerr << Name << "::run:  ";
-            cerr << "converged in " << t / pass_size << " passes (" << toc() - tic << " seconds)." << endl;
+            cerr << "converged in " << _iters << " passes (" << toc() - tic << " seconds)." << endl;
         }
     }
 
-    return diffs.maxDiff();
+    return maxDiff;
 }
 
 
 Factor MF::beliefV( size_t i ) const {
-    Factor piet;
-    piet = _beliefs[i];
-    piet.normalize();
-    return(piet);
+    return _beliefs[i].normalized();
 }
 
 
 Factor MF::belief (const VarSet &ns) const {
-    if( ns.size() == 1 )
-        return belief( *(ns.begin()) );
+    if( ns.size() == 0 )
+        return Factor();
+    else if( ns.size() == 1 )
+        return beliefV( findVar( *(ns.begin()) ) );
     else {
-        DAI_ASSERT( ns.size() == 1 );
+        DAI_THROW(BELIEF_NOT_AVAILABLE);
         return Factor();
     }
-}
-
-
-Factor MF::belief (const Var &n) const {
-    return( beliefV( findVar( n ) ) );
 }
 
 
@@ -180,9 +186,9 @@ vector<Factor> MF::beliefs() const {
 Real MF::logZ() const {
     Real s = 0.0;
 
-    for(size_t i=0; i < nrVars(); i++ )
+    for( size_t i = 0; i < nrVars(); i++ )
         s -= beliefV(i).entropy();
-    for(size_t I=0; I < nrFactors(); I++ ) {
+    for( size_t I = 0; I < nrFactors(); I++ ) {
         Factor henk;
         foreach( const Neighbor &j, nbF(I) )  // for all j in I
             henk *= _beliefs[j];

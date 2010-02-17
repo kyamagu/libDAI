@@ -4,7 +4,7 @@
  *  2, or (at your option) any later version. libDAI is distributed without any
  *  warranty. See the file COPYING for more details.
  *
- *  Copyright (C) 2006-2009  Joris Mooij  [joris dot mooij at libdai dot org]
+ *  Copyright (C) 2006-2010  Joris Mooij  [joris dot mooij at libdai dot org]
  *  Copyright (C) 2006-2007  Radboud University Nijmegen, The Netherlands
  */
 
@@ -89,6 +89,14 @@ Real ExactInf::run() {
 }
 
 
+Factor ExactInf::calcMarginal( const VarSet &vs ) const {
+    Factor P;
+    for( size_t I = 0; I < nrFactors(); I++ )
+        P *= factor(I);
+    return P.marginal( vs, true );
+}
+
+
 vector<Factor> ExactInf::beliefs() const {
     vector<Factor> result = _beliefsV;
     result.insert( result.end(), _beliefsF.begin(), _beliefsF.end() );
@@ -100,13 +108,14 @@ Factor ExactInf::belief( const VarSet &ns ) const {
     if( ns.size() == 0 )
         return Factor();
     else if( ns.size() == 1 ) {
-        return belief( *(ns.begin()) );
+        return beliefV( findVar( *(ns.begin()) ) );
     } else {
         size_t I;
         for( I = 0; I < nrFactors(); I++ )
             if( factor(I).vars() >> ns )
                 break;
-        DAI_ASSERT( I != nrFactors() );
+        if( I == nrFactors() )
+            DAI_THROW(BELIEF_NOT_AVAILABLE);
         return beliefF(I).marginal(ns);
     }
 }

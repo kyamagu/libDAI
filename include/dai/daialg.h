@@ -10,8 +10,7 @@
 
 
 /// \file
-/// \brief Defines abstract base class InfAlg, its descendants DAIAlg<>, the specializations DAIAlgFG and DAIAlgRG and some generic inference methods.
-/// \todo Improve documentation
+/// \brief Defines the general interface for inference methods in libDAI (classes InfAlg, DaiAlg<>, DaiAlgFG and DaiAlgRG).
 
 
 #ifndef __defined_libdai_daialg_h
@@ -23,112 +22,157 @@
 #include <vector>
 #include <dai/factorgraph.h>
 #include <dai/regiongraph.h>
+#include <dai/properties.h>
 
 
 namespace dai {
 
 
 /// InfAlg is an abstract base class, defining the common interface of all inference algorithms in libDAI.
-/** \todo General marginalization functions like calcMarginal now copy a complete InfAlg object. Instead,
+/** \idea General marginalization functions like calcMarginal() now copy a complete InfAlg object. Instead,
  *  it would make more sense that they construct a new object without copying the FactorGraph or RegionGraph.
  *  Or they can simply be made methods of the general InfAlg class.
  *  \idea Use a PropertySet as output of an InfAlg, instead of functions like maxDiff() and Iterations().
  */
 class InfAlg {
     public:
-        /// Virtual desctructor (needed because this class contains virtual functions)
+    /// \name Constructors/destructors
+    //@{
+        /// Virtual destructor (needed because this class contains virtual functions)
         virtual ~InfAlg() {}
 
-    public:
-        /// Returns a pointer to a new, cloned copy of *this (i.e., virtual copy constructor)
+        /// Returns a pointer to a new, cloned copy of \c *this (i.e., virtual copy constructor)
         virtual InfAlg* clone() const = 0;
+    //@}
 
+    /// \name Queries
+    //@{
         /// Identifies itself for logging purposes
         virtual std::string identify() const = 0;
 
-        /// Returns the "belief" (i.e., approximate marginal probability distribution) of a variable
-        virtual Factor belief( const Var &n ) const = 0;
+        /// Returns reference to underlying FactorGraph.
+        virtual FactorGraph &fg() = 0;
 
-        /// Returns the "belief" (i.e., approximate marginal probability distribution) of a set of variables
-        virtual Factor belief( const VarSet &n ) const = 0;
+        /// Returns constant reference to underlying FactorGraph.
+        virtual const FactorGraph &fg() const = 0;
+    //@}
 
-        /// Returns marginal for a variable.
-        /** Sometimes preferred to belief() for performance reasons.
-          * Faster implementations exist in e.g. BP.
-          */
-        virtual Factor beliefV( size_t i ) const { return belief( fg().var(i) ); }
-
-        /// Returns marginal for a factor.
-        /** Sometimes preferred to belief() for performance reasons.
-          * Faster implementations exist in e.g. BP.
-          */
-        virtual Factor beliefF( size_t I ) const { return belief( fg().factor(I).vars() ); }
-
-        /// Returns all "beliefs" (i.e., approximate marginal probability distribution) calculated by the algorithm
-        virtual std::vector<Factor> beliefs() const = 0;
-
-        /// Returns the logarithm of the (approximated) partition sum (normalizing constant of the factor graph)
-        virtual Real logZ() const = 0;
-
-        /// Initializes all data structures of the approximate inference algorithm
-        /** This method should be called at least once before run() is called
+    /// \name Inference interface
+    //@{
+        /// Initializes all data structures of the approximate inference algorithm.
+        /** \note This method should be called at least once before run() is called.
          */
         virtual void init() = 0;
 
-        /// Initializes all data structures corresponding to some set of variables
+        /// Initializes all data structures corresponding to some set of variables.
         /** This method can be used to do a partial initialization after a part of the factor graph has changed.
-         *  Instead of initializing all data structures, it only initializes those involving the variables in ns.
+         *  Instead of initializing all data structures, it only initializes those involving the variables in \a vs.
+         *  \throw NOT_IMPLEMENTED if not implemented/supported
          */
-        virtual void init( const VarSet &ns ) = 0;
+        virtual void init( const VarSet &vs ) = 0;
 
-        /// Runs the approximate inference algorithm
-        /*  Before run() is called the first time, init() should be called.
-         *  If run() returns successfully, the results can be queried using the methods belief(), beliefs() and logZ().
+        /// Runs the approximate inference algorithm.
+        /** \note Before run() is called the first time, init() should have been called.
          */
         virtual Real run() = 0;
 
-        /// Clamp variable with index i to value x (i.e. multiply with a Kronecker delta \f$\delta_{x_i, x}\f$)
-        /** If backup == true, make a backup of all factors that are changed
+        /// Returns the (approximate) marginal probability distribution of a variable.
+        /** \note Before this method is called, run() should have been called.
+         */
+        virtual Factor belief( const Var &v ) const { return belief( VarSet(v) ); }
+
+        /// Returns the (approximate) marginal probability distribution of a set of variables.
+        /** \note Before this method is called, run() should have been called.
+         *  \throw NOT_IMPLEMENTED if not implemented/supported.
+         *  \throw BELIEF_NOT_AVAILABLE if the requested belief cannot be calculated with this algorithm.
+         */
+        virtual Factor belief( const VarSet &vs ) const = 0;
+
+        /// Returns the (approximate) marginal probability distribution of the variable with index \a i.
+        /** For some approximate inference algorithms, using beliefV() is preferred to belief() for performance reasons.
+         *  \note Before this method is called, run() should have been called.
+         */
+        virtual Factor beliefV( size_t i ) const { return belief( fg().var(i) ); }
+
+        /// Returns the (approximate) marginal probability distribution of the variables on which factor \a I depends.
+        /** For some approximate inference algorithms, using beliefF() is preferred to belief() for performance reasons.
+         *  \note Before this method is called, run() should have been called.
+         */
+        virtual Factor beliefF( size_t I ) const { return belief( fg().factor(I).vars() ); }
+
+        /// Returns all beliefs (approximate marginal probability distributions) calculated by the algorithm.
+        /** \note Before this method is called, run() should have been called.
+         */
+        virtual std::vector<Factor> beliefs() const = 0;
+
+        /// Returns the logarithm of the (approximated) partition sum (normalizing constant of the factor graph).
+        /** \note Before this method is called, run() should have been called.
+         *  \throw NOT_IMPLEMENTED if not implemented/supported
+         */
+        virtual Real logZ() const = 0;
+
+        /// Returns maximum difference between single variable beliefs in the last iteration.
+        /** \throw NOT_IMPLEMENTED if not implemented/supported
+         */
+        virtual Real maxDiff() const = 0;
+
+        /// Returns number of iterations done (one iteration passes over the complete factorgraph).
+        /** \throw NOT_IMPLEMENTED if not implemented/supported
+         */
+        virtual size_t Iterations() const = 0;
+    //@}
+
+    /// \name Changing the factor graph
+    //@{
+        /// Clamp variable with index \a i to value \a x (i.e. multiply with a Kronecker delta \f$\delta_{x_i, x}\f$)
+        /** If \a backup == \c true, make a backup of all factors that are changed.
          */
         virtual void clamp( size_t i, size_t x, bool backup = false ) = 0;
 
-        // OBSOLETE
-        /// Only for backwards compatibility (to be removed soon)
-        virtual void clamp( const Var &v, size_t x, bool backup = false ) = 0;
-
-        /// Set all factors interacting with var(i) to 1
+        /// Sets all factors interacting with variable with index \a i to one.
+        /** If \a backup == \c true, make a backup of all factors that are changed.
+         */
         virtual void makeCavity( size_t i, bool backup = false ) = 0;
+    //@}
 
-        /// Return maximum difference between single node beliefs in the last pass
-        /// \throw Exception if not implemented/supported
-        virtual Real maxDiff() const = 0;
-
-        /// Return number of passes over the factorgraph
-        /// \throw Exception if not implemented/supported
-        virtual size_t Iterations() const = 0;
-
-
-        /// Get reference to underlying FactorGraph
-        virtual FactorGraph &fg() = 0;
-
-        /// Get const reference to underlying FactorGraph
-        virtual const FactorGraph &fg() const = 0;
-
-        /// Save factor I
+    /// \name Backup/restore mechanism for factors
+    //@{
+        /// Make a backup copy of factor \a I
+        /** \throw MULTIPLE_UNDO if a backup already exists
+         */
         virtual void backupFactor( size_t I ) = 0;
-        /// Save Factors involving ns
-        virtual void backupFactors( const VarSet &ns ) = 0;
+        /// Make backup copies of all factors involving the variables in \a vs
+        /** \throw MULTIPLE_UNDO if a backup already exists
+         */
+        virtual void backupFactors( const VarSet &vs ) = 0;
 
-        /// Restore factor I
+        /// Restore factor \a I from its backup copy
         virtual void restoreFactor( size_t I ) = 0;
-        /// Restore Factors involving ns
-        virtual void restoreFactors( const VarSet &ns ) = 0;
+        /// Restore the factors involving the variables in \a vs from their backup copies
+        virtual void restoreFactors( const VarSet &vs ) = 0;
+    //@}
+
+    /// \name Managing parameters
+    //@{
+        /// Set parameters of this inference algorithm.
+        /** The parameters are set according to the PropertySet \a opts. 
+         *  The values can be stored either as std::string or as the type of the corresponding MF::props member.
+         */
+        virtual void setProperties( const PropertySet &opts ) = 0;
+        /// Returns parameters of this inference algorithm converted into a PropertySet.
+        virtual PropertySet getProperties() const = 0;
+        /// Returns parameters of this inference algorithm formatted as a string in the format "[key1=val1,key2=val2,...,keyn=valn]".
+        virtual std::string printProperties() const = 0;
+    //@}
 };
 
 
-/// Combines an InfAlg and a graphical model, e.g., a FactorGraph or RegionGraph
-/** \tparam GRM Should be castable to FactorGraph
- *  \todo A DAIAlg should not inherit from a FactorGraph or RegionGraph, but should
+/// Combines the abstract base class InfAlg with a graphical model (e.g., a FactorGraph or RegionGraph).
+/** Inference algorithms in libDAI directly inherit from a DAIAlg, currently either
+ *  from a DAIAlg<FactorGraph> or from a DAIAlg<RegionGraph>.
+ *
+ *  \tparam GRM Should be castable to FactorGraph
+ *  \idea A DAIAlg should not inherit from a FactorGraph or RegionGraph, but should
  *  store a reference to the graphical model object. This prevents needless copying
  *  of (possibly large) data structures. Disadvantage: the caller must not change
  *  the graphical model between calls to the inference algorithm (maybe a smart_ptr
@@ -137,40 +181,49 @@ class InfAlg {
 template <class GRM>
 class DAIAlg : public InfAlg, public GRM {
     public:
+    /// \name Constructors/destructors
+    //@{
         /// Default constructor
         DAIAlg() : InfAlg(), GRM() {}
 
         /// Construct from GRM
         DAIAlg( const GRM &grm ) : InfAlg(), GRM(grm) {}
+    //@}
 
-        /// Save factor I
-        void backupFactor( size_t I ) { GRM::backupFactor( I ); }
-        /// Save Factors involving ns
-        void backupFactors( const VarSet &ns ) { GRM::backupFactors( ns ); }
-
-        /// Restore factor I
-        void restoreFactor( size_t I ) { GRM::restoreFactor( I ); }
-        /// Restore Factors involving ns
-        void restoreFactors( const VarSet &ns ) { GRM::restoreFactors( ns ); }
-
-        /// Clamp variable with index i to value x (i.e. multiply with a Kronecker delta \f$\delta_{x_i, x}\f$)
-        void clamp( size_t i, size_t x, bool backup = false ) { GRM::clamp( i, x, backup ); }
-
-        // OBSOLETE
-        /// Only for backwards compatibility (to be removed soon)
-        void clamp( const Var &v, size_t x, bool backup = false ) {
-            GRM::clamp( v, x, backup );
-            std::cerr << "Warning: this DAIAlg<...>::clamp(const Var&,...) interface is obsolete!" << std::endl;
-        }
-
-        /// Set all factors interacting with var(i) to 1
-        void makeCavity( size_t i, bool backup = false ) { GRM::makeCavity( i, backup ); }
-
-        /// Get reference to underlying FactorGraph
+    /// \name Queries
+    //@{
+        /// Returns reference to underlying FactorGraph.
         FactorGraph &fg() { return (FactorGraph &)(*this); }
 
-        /// Get const reference to underlying FactorGraph
+        /// Returns constant reference to underlying FactorGraph.
         const FactorGraph &fg() const { return (const FactorGraph &)(*this); }
+    //@}
+
+    /// \name Changing the factor graph
+    //@{
+        /// Clamp variable with index \a i to value \a x (i.e. multiply with a Kronecker delta \f$\delta_{x_i, x}\f$)
+        /** If \a backup == \c true, make a backup of all factors that are changed.
+         */
+        void clamp( size_t i, size_t x, bool backup = false ) { GRM::clamp( i, x, backup ); }
+
+        /// Sets all factors interacting with variable with index \a i to one.
+        /** If \a backup == \c true, make a backup of all factors that are changed.
+         */
+        void makeCavity( size_t i, bool backup = false ) { GRM::makeCavity( i, backup ); }
+    //@}
+
+    /// \name Backup/restore mechanism for factors
+    //@{
+        /// Make a backup copy of factor \a I
+        void backupFactor( size_t I ) { GRM::backupFactor( I ); }
+        /// Make backup copies of all factors involving the variables in \a vs
+        void backupFactors( const VarSet &vs ) { GRM::backupFactors( vs ); }
+
+        /// Restore factor \a I from its backup copy
+        void restoreFactor( size_t I ) { GRM::restoreFactor( I ); }
+        /// Restore the factors involving the variables in \a vs from their backup copies
+        void restoreFactors( const VarSet &vs ) { GRM::restoreFactors( vs ); }
+    //@}
 };
 
 
@@ -181,10 +234,28 @@ typedef DAIAlg<FactorGraph> DAIAlgFG;
 typedef DAIAlg<RegionGraph> DAIAlgRG;
 
 
-Factor calcMarginal( const InfAlg & obj, const VarSet & ns, bool reInit );
-std::vector<Factor> calcPairBeliefs( const InfAlg & obj, const VarSet& ns, bool reInit );
-std::vector<Factor> calcPairBeliefsNew( const InfAlg & obj, const VarSet& ns, bool reInit );
-Factor calcMarginal2ndO( const InfAlg & obj, const VarSet& ns, bool reInit );
+/// Calculates the marginal probability distribution for \a vs using inference algorithm \a obj.
+/** calcMarginal() works by clamping all variables in \a vs and calculating the partition sum for each clamped state.
+ *  Therefore, it can be used in combination with any inference algorithm that can calculate/approximate partition sums.
+ *  \param obj instance of inference algorithm to be used 
+ *  \param vs variables for which the marginal should be calculated
+ *  \param reInit should be set to \c true if at least one of the possible clamped states would be invalid (leading to a factor graph with zero partition sum).
+ */
+Factor calcMarginal( const InfAlg& obj, const VarSet& vs, bool reInit );
+
+/// Calculates beliefs for all pairs of variables in \a vs using inference algorithm \a obj.
+/** calcPairBeliefs() works by 
+ *  - clamping single variables in \a vs and calculating the partition sum and the single variable beliefs for each clamped state, if \a accurate == \c false;
+ *  - clamping pairs of variables in \a vs and calculating the partition sum for each clamped state, if \a accurate == \c true.
+ *
+ *  Therefore, it can be used in combination with any inference algorithm that can calculate/approximate partition sums (and single variable beliefs, if
+ *  \a accurate == \c true).
+ *  \param obj instance of inference algorithm to be used 
+ *  \param vs variables for which the pair beliefs should be calculated
+ *  \param reInit should be set to \c true if at least one of the possible clamped states would be invalid (leading to a factor graph with zero partition sum).
+ *  \param accurate if \c true, uses a slower but more accurate approximation algorithm
+ */
+std::vector<Factor> calcPairBeliefs( const InfAlg& obj, const VarSet& vs, bool reInit, bool accurate=false );
 
 
 } // end of namespace dai

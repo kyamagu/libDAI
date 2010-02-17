@@ -4,7 +4,7 @@
  *  2, or (at your option) any later version. libDAI is distributed without any
  *  warranty. See the file COPYING for more details.
  *
- *  Copyright (C) 2006-2009  Joris Mooij  [joris dot mooij at libdai dot org]
+ *  Copyright (C) 2006-2010  Joris Mooij  [joris dot mooij at libdai dot org]
  *  Copyright (C) 2006-2007  Radboud University Nijmegen, The Netherlands
  */
 
@@ -141,10 +141,7 @@ void BP::findMaxResidual( size_t &i, size_t &_I ) {
 }
 
 
-void BP::calcNewMessage( size_t i, size_t _I ) {
-    // calculate updated message I->i
-    size_t I = nbV(i,_I);
-
+Prob BP::calcIncomingMessageProduct( size_t I, bool without_i, size_t i ) const {
     Factor Fprod( factor(I) );
     Prob &prod = Fprod.p();
     if( props.logdomain )
@@ -152,7 +149,7 @@ void BP::calcNewMessage( size_t i, size_t _I ) {
 
     // Calculate product of incoming messages and factor I
     foreach( const Neighbor &j, nbF(I) )
-        if( j != i ) { // for all j in I \ i
+        if( !(without_i && (j == i)) ) {
             // prod_j will be the product of messages coming into j
             Prob prod_j( var(j).states(), props.logdomain ? 0.0 : 1.0 );
             foreach( const Neighbor &J, nbV(j) )
@@ -165,50 +162,66 @@ void BP::calcNewMessage( size_t i, size_t _I ) {
 
             // multiply prod with prod_j
             if( !DAI_BP_FAST ) {
-                /* UNOPTIMIZED (SIMPLE TO READ, BUT SLOW) VERSION */
+                // UNOPTIMIZED (SIMPLE TO READ, BUT SLOW) VERSION
                 if( props.logdomain )
                     Fprod += Factor( var(j), prod_j );
                 else
                     Fprod *= Factor( var(j), prod_j );
             } else {
-                /* OPTIMIZED VERSION */
+                // OPTIMIZED VERSION
                 size_t _I = j.dual;
                 // ind is the precalculated IndexFor(j,I) i.e. to x_I == k corresponds x_j == ind[k]
                 const ind_t &ind = index(j, _I);
+
                 for( size_t r = 0; r < prod.size(); ++r )
                     if( props.logdomain )
                         prod.set( r, prod[r] + prod_j[ind[r]] );
                     else
                         prod.set( r, prod[r] * prod_j[ind[r]] );
             }
+    }
+    return prod;
+}
+
+
+void BP::calcNewMessage( size_t i, size_t _I ) {
+    // calculate updated message I->i
+    size_t I = nbV(i,_I);
+
+    Prob marg;
+    if( factor(I).vars().size() == 1 ) // optimization
+        marg = factor(I).p();
+    else {
+        Factor Fprod( factor(I) );
+        Prob &prod = Fprod.p();
+        prod = calcIncomingMessageProduct( I, true, i );
+
+        if( props.logdomain ) {
+            prod -= prod.max();
+            prod.takeExp();
         }
 
-    if( props.logdomain ) {
-        prod -= prod.max();
-        prod.takeExp();
-    }
-
-    // Marginalize onto i
-    Prob marg;
-    if( !DAI_BP_FAST ) {
-        /* UNOPTIMIZED (SIMPLE TO READ, BUT SLOW) VERSION */
-        if( props.inference == Properties::InfType::SUMPROD )
-            marg = Fprod.marginal( var(i) ).p();
-        else
-            marg = Fprod.maxMarginal( var(i) ).p();
-    } else {
-        /* OPTIMIZED VERSION */
-        marg = Prob( var(i).states(), 0.0 );
-        // ind is the precalculated IndexFor(i,I) i.e. to x_I == k corresponds x_i == ind[k]
-        const ind_t ind = index(i,_I);
-        if( props.inference == Properties::InfType::SUMPROD )
-            for( size_t r = 0; r < prod.size(); ++r )
-                marg.set( ind[r], marg[ind[r]] + prod[r] );
-        else
-            for( size_t r = 0; r < prod.size(); ++r )
-                if( prod[r] > marg[ind[r]] )
-                    marg.set( ind[r], prod[r] );
-        marg.normalize();
+        // Marginalize onto i
+        if( !DAI_BP_FAST ) {
+            // UNOPTIMIZED (SIMPLE TO READ, BUT SLOW) VERSION
+            if( props.inference == Properties::InfType::SUMPROD )
+                marg = Fprod.marginal( var(i) ).p();
+            else
+                marg = Fprod.maxMarginal( var(i) ).p();
+        } else {
+            // OPTIMIZED VERSION 
+            marg = Prob( var(i).states(), 0.0 );
+            // ind is the precalculated IndexFor(i,I) i.e. to x_I == k corresponds x_i == ind[k]
+            const ind_t ind = index(i,_I);
+            if( props.inference == Properties::InfType::SUMPROD )
+                for( size_t r = 0; r < prod.size(); ++r )
+                    marg.set( ind[r], marg[ind[r]] + prod[r] );
+            else
+                for( size_t r = 0; r < prod.size(); ++r )
+                    if( prod[r] > marg[ind[r]] )
+                        marg.set( ind[r], prod[r] );
+            marg.normalize();
+        }
     }
 
     // Store result
@@ -232,34 +245,33 @@ Real BP::run() {
         cerr << endl;
 
     double tic = toc();
-    Diffs diffs(nrVars(), 1.0);
+    Real maxDiff = INFINITY;
 
-    vector<Edge> update_seq;
-
-    vector<Factor> old_beliefs;
-    old_beliefs.reserve( nrVars() );
+    vector<Factor> oldBeliefsV, oldBeliefsF;
+    oldBeliefsV.reserve( nrVars() );
     for( size_t i = 0; i < nrVars(); ++i )
-        old_beliefs.push_back( beliefV(i) );
+        oldBeliefsV.push_back( beliefV(i) );
+    oldBeliefsF.reserve( nrFactors() );
+    for( size_t I = 0; I < nrFactors(); ++I )
+        oldBeliefsF.push_back( beliefF(I) );
 
     size_t nredges = nrEdges();
-
+    vector<Edge> update_seq;
     if( props.updates == Properties::UpdateType::SEQMAX ) {
         // do the first pass
         for( size_t i = 0; i < nrVars(); ++i )
-            foreach( const Neighbor &I, nbV(i) ) {
+            foreach( const Neighbor &I, nbV(i) )
                 calcNewMessage( i, I.iter );
-            }
     } else {
         update_seq.reserve( nredges );
-        /// \todo Investigate whether performance increases by switching the order of following two loops:
-        for( size_t i = 0; i < nrVars(); ++i )
-            foreach( const Neighbor &I, nbV(i) )
-                update_seq.push_back( Edge( i, I.iter ) );
+        for( size_t I = 0; I < nrFactors(); I++ )
+            foreach( const Neighbor &i, nbF(I) )
+                update_seq.push_back( Edge( i, i.dual ) );
     }
 
     // do several passes over the network until maximum number of iterations has
     // been reached or until the maximum belief difference is smaller than tolerance
-    for( _iters=0; _iters < props.maxiter && diffs.maxDiff() > props.tol; ++_iters ) {
+    for( _iters=0; _iters < props.maxiter && maxDiff > props.tol; ++_iters ) {
         if( props.updates == Properties::UpdateType::SEQMAX ) {
             // Residuals-BP by Koller et al.
             for( size_t t = 0; t < nredges; ++t ) {
@@ -301,24 +313,30 @@ Real BP::run() {
         }
 
         // calculate new beliefs and compare with old ones
+        maxDiff = -INFINITY;
         for( size_t i = 0; i < nrVars(); ++i ) {
-            Factor nb( beliefV(i) );
-            diffs.push( dist( nb, old_beliefs[i], Prob::DISTLINF ) );
-            old_beliefs[i] = nb;
+            Factor b( beliefV(i) );
+            maxDiff = std::max( maxDiff, dist( b, oldBeliefsV[i], Prob::DISTLINF ) );
+            oldBeliefsV[i] = b;
+        }
+        for( size_t I = 0; I < nrFactors(); ++I ) {
+            Factor b( beliefF(I) );
+            maxDiff = std::max( maxDiff, dist( b, oldBeliefsF[I], Prob::DISTLINF ) );
+            oldBeliefsF[I] = b;
         }
 
         if( props.verbose >= 3 )
-            cerr << Name << "::run:  maxdiff " << diffs.maxDiff() << " after " << _iters+1 << " passes" << endl;
+            cerr << Name << "::run:  maxdiff " << maxDiff << " after " << _iters+1 << " passes" << endl;
     }
 
-    if( diffs.maxDiff() > _maxdiff )
-        _maxdiff = diffs.maxDiff();
+    if( maxDiff > _maxdiff )
+        _maxdiff = maxDiff;
 
     if( props.verbose >= 1 ) {
-        if( diffs.maxDiff() > props.tol ) {
+        if( maxDiff > props.tol ) {
             if( props.verbose == 1 )
                 cerr << endl;
-                cerr << Name << "::run:  WARNING: not converged within " << props.maxiter << " passes (" << toc() - tic << " seconds)...final maxdiff:" << diffs.maxDiff() << endl;
+                cerr << Name << "::run:  WARNING: not converged within " << props.maxiter << " passes (" << toc() - tic << " seconds)...final maxdiff:" << maxDiff << endl;
         } else {
             if( props.verbose >= 3 )
                 cerr << Name << "::run:  ";
@@ -326,7 +344,7 @@ Real BP::run() {
         }
     }
 
-    return diffs.maxDiff();
+    return maxDiff;
 }
 
 
@@ -337,50 +355,6 @@ void BP::calcBeliefV( size_t i, Prob &p ) const {
             p += newMessage( i, I.iter );
         else
             p *= newMessage( i, I.iter );
-}
-
-
-void BP::calcBeliefF( size_t I, Prob &p ) const {
-    Factor Fprod( factor( I ) );
-    Prob &prod = Fprod.p();
-
-    if( props.logdomain )
-        prod.takeLog();
-
-    foreach( const Neighbor &j, nbF(I) ) {
-        // prod_j will be the product of messages coming into j
-        Prob prod_j( var(j).states(), props.logdomain ? 0.0 : 1.0 );
-        foreach( const Neighbor &J, nbV(j) )
-            if( J != I ) { // for all J in nb(j) \ I
-                if( props.logdomain )
-                    prod_j += newMessage( j, J.iter );
-                else
-                    prod_j *= newMessage( j, J.iter );
-            }
-
-        // multiply prod with prod_j
-        if( !DAI_BP_FAST ) {
-            /* UNOPTIMIZED (SIMPLE TO READ, BUT SLOW) VERSION */
-            if( props.logdomain )
-                Fprod += Factor( var(j), prod_j );
-            else
-                Fprod *= Factor( var(j), prod_j );
-        } else {
-            /* OPTIMIZED VERSION */
-            size_t _I = j.dual;
-            // ind is the precalculated IndexFor(j,I) i.e. to x_I == k corresponds x_j == ind[k]
-            const ind_t & ind = index(j, _I);
-
-            for( size_t r = 0; r < prod.size(); ++r ) {
-                if( props.logdomain )
-                    prod.set( r, prod[r] + prod_j[ind[r]] );
-                else
-                    prod.set( r, prod[r] * prod_j[ind[r]] );
-            }
-        }
-    }
-
-    p = prod;
 }
 
 
@@ -412,11 +386,6 @@ Factor BP::beliefF( size_t I ) const {
 }
 
 
-Factor BP::belief( const Var &n ) const {
-    return( beliefV( findVar( n ) ) );
-}
-
-
 vector<Factor> BP::beliefs() const {
     vector<Factor> result;
     for( size_t i = 0; i < nrVars(); ++i )
@@ -428,14 +397,17 @@ vector<Factor> BP::beliefs() const {
 
 
 Factor BP::belief( const VarSet &ns ) const {
-    if( ns.size() == 1 )
-        return belief( *(ns.begin()) );
+    if( ns.size() == 0 )
+        return Factor();
+    else if( ns.size() == 1 )
+        return beliefV( findVar( *(ns.begin() ) ) );
     else {
         size_t I;
         for( I = 0; I < nrFactors(); I++ )
             if( factor(I).vars() >> ns )
                 break;
-        DAI_ASSERT( I != nrFactors() );
+        if( I == nrFactors() )
+            DAI_THROW(BELIEF_NOT_AVAILABLE);
         return beliefF(I).marginal(ns);
     }
 }
@@ -443,7 +415,7 @@ Factor BP::belief( const VarSet &ns ) const {
 
 Real BP::logZ() const {
     Real sum = 0.0;
-    for(size_t i = 0; i < nrVars(); ++i )
+    for( size_t i = 0; i < nrVars(); ++i )
         sum += (1.0 - nbV(i).size()) * beliefV(i).entropy();
     for( size_t I = 0; I < nrFactors(); ++I )
         sum -= dist( beliefF(I), factor(I), Prob::DISTKL );
@@ -478,7 +450,10 @@ void BP::updateMessage( size_t i, size_t _I ) {
         if( props.updates == Properties::UpdateType::SEQMAX )
             updateResidual( i, _I, 0.0 );
     } else {
-        message(i,_I) = (message(i,_I) ^ props.damping) * (newMessage(i,_I) ^ (1.0 - props.damping));
+        if( props.logdomain )
+            message(i,_I) = (message(i,_I) * props.damping) + (newMessage(i,_I) * (1.0 - props.damping));
+        else
+            message(i,_I) = (message(i,_I) ^ props.damping) * (newMessage(i,_I) ^ (1.0 - props.damping));
         if( props.updates == Properties::UpdateType::SEQMAX )
             updateResidual( i, _I, dist( newMessage(i,_I), message(i,_I), Prob::DISTLINF ) );
     }

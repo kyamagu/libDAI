@@ -9,8 +9,7 @@
 
 
 /// \file
-/// \brief Defines class Gibbs
-/// \todo Improve documentation
+/// \brief Defines class Gibbs, which implements Gibbs sampling
 
 
 #ifndef __defined_libdai_gibbs_h
@@ -26,23 +25,33 @@ namespace dai {
 
 
 /// Approximate inference algorithm "Gibbs sampling"
+/** \author Frederik Eaton
+ */
 class Gibbs : public DAIAlgFG {
     private:
+        /// Type used to store the counts of various states
         typedef std::vector<size_t> _count_t;
+        /// Type used to store the joint state of all variables
         typedef std::vector<size_t> _state_t;
-
+        /// Number of samples counted so far (excluding burn-in)
         size_t _sample_count;
+        /// State counts for each variable
         std::vector<_count_t> _var_counts;
+        /// State counts for each factor
         std::vector<_count_t> _factor_counts;
+        /// Current joint state of all variables
         _state_t _state;
 
     public:
-        /// Parameters of this inference algorithm
+        /// Parameters for Gibbs
         struct Properties {
-            /// Number of iterations
+            /// Total number of iterations
             size_t iters;
 
-            /// Verbosity
+            /// Number of "burn-in" iterations
+            size_t burnin;
+
+            /// Verbosity (amount of output sent to stderr)
             size_t verbose;
         } props;
 
@@ -53,19 +62,23 @@ class Gibbs : public DAIAlgFG {
         /// Default constructor
         Gibbs() : DAIAlgFG(), _sample_count(0), _var_counts(), _factor_counts(), _state() {}
 
-        /// Construct from FactorGraph fg and PropertySet opts
+        /// Construct from FactorGraph \a fg and PropertySet \a opts
+        /** \param opts Parameters @see Properties
+         */
         Gibbs( const FactorGraph &fg, const PropertySet &opts ) : DAIAlgFG(fg), _sample_count(0), _var_counts(), _factor_counts(), _state() {
             setProperties( opts );
             construct();
         }
 
 
-        /// @name General InfAlg interface
-        //@{
+    /// \name General InfAlg interface
+    //@{
         virtual Gibbs* clone() const { return new Gibbs(*this); }
         virtual std::string identify() const { return std::string(Name) + printProperties(); }
-        virtual Factor belief( const Var &n ) const;
-        virtual Factor belief( const VarSet &ns ) const;
+        virtual Factor belief( const Var &v ) const { return beliefV( findVar( v ) ); }
+        virtual Factor belief( const VarSet &vs ) const;
+        virtual Factor beliefV( size_t i ) const;
+        virtual Factor beliefF( size_t I ) const;
         virtual std::vector<Factor> beliefs() const;
         virtual Real logZ() const { DAI_THROW(NOT_IMPLEMENTED); return 0.0; }
         virtual void init();
@@ -73,38 +86,50 @@ class Gibbs : public DAIAlgFG {
         virtual Real run();
         virtual Real maxDiff() const { DAI_THROW(NOT_IMPLEMENTED); return 0.0; }
         virtual size_t Iterations() const { return props.iters; }
-        //@}
+        virtual void setProperties( const PropertySet &opts );
+        virtual PropertySet getProperties() const;
+        virtual std::string printProperties() const;
+    //@}
 
 
-        /// @name Additional interface specific for Gibbs
-        //@{
-        Factor beliefV( size_t i ) const;
-        Factor beliefF( size_t I ) const;
+    /// \name Additional interface specific for Gibbs
+    //@{
+        /// Draw the current joint state of all variables from a uniform random distribution
         void randomizeState();
-        //@}
-
-        /// Return reference to current state vector
+        /// Return reference to current state of all variables
         std::vector<size_t>& state() { return _state; }
-
-        /// Return const reference to current state vector
+        /// Return constant reference to current state of all variables
         const std::vector<size_t>& state() const { return _state; }
+    //@}
 
     private:
-        void updateCounts();
-        Prob getVarDist( size_t i );
-        void resampleVar( size_t i );
-        size_t getFactorEntry( size_t I );
-        size_t getFactorEntryDiff( size_t I, size_t i );
-
+        /// Helper function for constructors
         void construct();
-        /// Set Props according to the PropertySet opts, where the values can be stored as std::strings or as the type of the corresponding Props member
-        void setProperties( const PropertySet &opts );
-        PropertySet getProperties() const;
-        std::string printProperties() const;
+        /// Updates all counts (_sample_count, _var_counts, _factor_counts) based on current state
+        void updateCounts();
+        /// Calculate conditional distribution of variable \a i, given the current state
+        Prob getVarDist( size_t i );
+        /// Draw state of variable \a i randomly from its conditional distribution and update the current state
+        void resampleVar( size_t i );
+        /// Calculates linear index into factor \a I corresponding to the current state
+        size_t getFactorEntry( size_t I );
+        /// Calculates the differences between linear indices into factor \a I corresponding with a state change of variable \a i
+        size_t getFactorEntryDiff( size_t I, size_t i );
 };
 
 
+/// Runs Gibbs sampling for \a iters iterations (of which \a burnin for burn-in) on FactorGraph \a fg, and returns the resulting state
+/** \relates Gibbs
+ */
+std::vector<size_t> getGibbsState( const FactorGraph &fg, size_t iters );
+
+
 } // end of namespace dai
+
+
+/** \example example_sprinkler_gibbs.cpp
+ *  This example shows how to use the Gibbs class.
+ */
 
 
 #endif

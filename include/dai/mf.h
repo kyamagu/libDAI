@@ -10,8 +10,7 @@
 
 
 /// \file
-/// \brief Defines class MF
-/// \todo Improve documentation
+/// \brief Defines class MF which implements the Mean Field algorithm
 
 
 #ifndef __defined_libdai_mf_h
@@ -28,8 +27,15 @@ namespace dai {
 
 
 /// Approximate inference algorithm "Mean Field"
+/** The Mean Field algorithm iteratively calculates approximations of
+ *  single variable marginals (beliefs). The update equation for 
+ *  a single belief \f$b_i\f$ is given by:
+ *    \f[ b_i^{\mathrm{new}}(x_i) \propto \prod_{I\in N_i} \exp \left( \sum_{x_{N_I \setminus \{i\}}} \log f_I(x_I) \prod_{j \in N_I \setminus \{i\}} b_j(x_j) \right) \f]
+ *  These update equations are performed for all variables until convergence.
+ */
 class MF : public DAIAlgFG {
     private:
+        /// Current approximations of single variable marginals
         std::vector<Factor>  _beliefs;
         /// Maximum difference encountered so far
         Real _maxdiff;
@@ -37,18 +43,18 @@ class MF : public DAIAlgFG {
         size_t _iters;
 
     public:
-        /// Parameters of this inference algorithm
+        /// Parameters for MF
         struct Properties {
-            /// Verbosity
+            /// Verbosity (amount of output sent to stderr)
             size_t verbose;
 
             /// Maximum number of iterations
             size_t maxiter;
 
-            /// Tolerance
+            /// Tolerance for convergence test
             Real tol;
 
-            /// Damping constant
+            /// Damping constant (0.0 means no damping, 1.0 is maximum damping)
             Real damping;
         } props;
 
@@ -56,22 +62,27 @@ class MF : public DAIAlgFG {
         static const char *Name;
 
     public:
+    /// \name Constructors/destructors
+    //@{
         /// Default constructor
         MF() : DAIAlgFG(), _beliefs(), _maxdiff(0.0), _iters(0U), props() {}
 
-        /// Construct from FactorGraph fg and PropertySet opts
+        /// Construct from FactorGraph \a fg and PropertySet \a opts
+        /** \param opts Parameters @see Properties
+         */
         MF( const FactorGraph &fg, const PropertySet &opts ) : DAIAlgFG(fg), _beliefs(), _maxdiff(0.0), _iters(0U), props() {
             setProperties( opts );
             construct();
         }
+    //@}
 
-
-        /// @name General InfAlg interface
-        //@{
+    /// \name General InfAlg interface
+    //@{
         virtual MF* clone() const { return new MF(*this); }
         virtual std::string identify() const;
-        virtual Factor belief( const Var &n ) const;
-        virtual Factor belief( const VarSet &ns ) const;
+        virtual Factor belief( const Var &v ) const { return beliefV( findVar( v ) ); }
+        virtual Factor belief( const VarSet &vs ) const;
+        virtual Factor beliefV( size_t i ) const;
         virtual std::vector<Factor> beliefs() const;
         virtual Real logZ() const;
         virtual void init();
@@ -79,19 +90,17 @@ class MF : public DAIAlgFG {
         virtual Real run();
         virtual Real maxDiff() const { return _maxdiff; }
         virtual size_t Iterations() const { return _iters; }
-        //@}
-
-
-        /// @name Additional interface specific for MF
-        //@{
-        Factor beliefV( size_t i ) const;
-        //@}
+        virtual void setProperties( const PropertySet &opts );
+        virtual PropertySet getProperties() const;
+        virtual std::string printProperties() const;
+    //@}
 
     private:
+        /// Helper function for constructors
         void construct();
-        void setProperties( const PropertySet &opts );
-        PropertySet getProperties() const;
-        std::string printProperties() const;
+
+        /// Calculates an updated belief of variable \a i
+        Factor calcNewBelief( size_t i );
 };
 
 

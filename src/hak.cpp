@@ -4,7 +4,7 @@
  *  2, or (at your option) any later version. libDAI is distributed without any
  *  warranty. See the file COPYING for more details.
  *
- *  Copyright (C) 2006-2009  Joris Mooij  [joris dot mooij at libdai dot org]
+ *  Copyright (C) 2006-2010  Joris Mooij  [joris dot mooij at libdai dot org]
  *  Copyright (C) 2006-2007  Radboud University Nijmegen, The Netherlands
  */
 
@@ -22,7 +22,6 @@ using namespace std;
 
 
 const char *HAK::Name = "HAK";
-
 
 
 /// Sets factor entries that lie between 0 and \a epsilon to \a epsilon
@@ -101,12 +100,12 @@ string HAK::printProperties() const {
 }
 
 
-void HAK::constructMessages() {
+void HAK::construct() {
     // Create outer beliefs
     _Qa.clear();
     _Qa.reserve(nrORs());
     for( size_t alpha = 0; alpha < nrORs(); alpha++ )
-        _Qa.push_back( Factor( OR(alpha).vars() ) );
+        _Qa.push_back( Factor( OR(alpha) ) );
 
     // Create inner beliefs
     _Qb.clear();
@@ -135,16 +134,15 @@ void HAK::constructMessages() {
 HAK::HAK( const RegionGraph &rg, const PropertySet &opts ) : DAIAlgRG(rg), _Qa(), _Qb(), _muab(), _muba(), _maxdiff(0.0), _iters(0U), props() {
     setProperties( opts );
 
-    constructMessages();
+    construct();
 }
 
 
 void HAK::findLoopClusters( const FactorGraph & fg, std::set<VarSet> &allcl, VarSet newcl, const Var & root, size_t length, VarSet vars ) {
     for( VarSet::const_iterator in = vars.begin(); in != vars.end(); in++ ) {
         VarSet ind = fg.delta( fg.findVar( *in ) );
-        if( (newcl.size()) >= 2 && ind.contains( root ) ) {
+        if( (newcl.size()) >= 2 && ind.contains( root ) )
             allcl.insert( newcl | *in );
-        }
         else if( length > 1 )
             findLoopClusters( fg, allcl, newcl | *in, root, length - 1, ind / newcl );
     }
@@ -157,9 +155,12 @@ HAK::HAK(const FactorGraph & fg, const PropertySet &opts) : DAIAlgRG(), _Qa(), _
     vector<VarSet> cl;
     if( props.clusters == Properties::ClustersType::MIN ) {
         cl = fg.Cliques();
+        constructCVM( fg, cl );
     } else if( props.clusters == Properties::ClustersType::DELTA ) {
+        cl.reserve( fg.nrVars() );
         for( size_t i = 0; i < fg.nrVars(); i++ )
-            cl.push_back(fg.Delta(i));
+            cl.push_back( fg.Delta(i) );
+        constructCVM( fg, cl );
     } else if( props.clusters == Properties::ClustersType::LOOP ) {
         cl = fg.Cliques();
         set<VarSet> scl;
@@ -175,12 +176,37 @@ HAK::HAK(const FactorGraph & fg, const PropertySet &opts) : DAIAlgRG(), _Qa(), _
             for( vector<VarSet>::const_iterator cli = cl.begin(); cli != cl.end(); cli++ )
                 cerr << *cli << endl;
         }
+        constructCVM( fg, cl );
+    } else if( props.clusters == Properties::ClustersType::BETHE ) {
+        // build outer regions (the cliques)
+        cl = fg.Cliques();
+        size_t nrEdges = 0;
+        for( size_t c = 0; c < cl.size(); c++ )
+            nrEdges += cl[c].size();
+
+        // build inner regions (single variables)
+        vector<Region> irs;
+        irs.reserve( fg.nrVars() );
+        for( size_t i = 0; i < fg.nrVars(); i++ )
+            irs.push_back( Region( fg.var(i), 1.0 ) );
+
+        // build edges (an outer and inner region are connected if the outer region contains the inner one)
+        // and calculate counting number for inner regions
+        vector<std::pair<size_t, size_t> > edges;
+        edges.reserve( nrEdges );
+        for( size_t c = 0; c < cl.size(); c++ )
+            for( size_t i = 0; i < irs.size(); i++ )
+                if( cl[c] >> irs[i] ) {
+                    edges.push_back( make_pair( c, i ) );
+                    irs[i].c() -= 1.0;
+                }
+
+        // build region graph
+        RegionGraph::construct( fg, cl, irs, edges );
     } else
         DAI_THROW(UNKNOWN_ENUM_VALUE);
 
-    RegionGraph rg(fg,cl);
-    RegionGraph::operator=(rg);
-    constructMessages();
+    construct();
 
     if( props.verbose >= 3 )
         cerr << Name << " regiongraph: " << *this << endl;
@@ -193,12 +219,14 @@ string HAK::identify() const {
 
 
 void HAK::init( const VarSet &ns ) {
-    for( vector<Factor>::iterator alpha = _Qa.begin(); alpha != _Qa.end(); alpha++ )
-        if( alpha->vars().intersects( ns ) ) {
+    for( size_t alpha = 0; alpha < nrORs(); alpha++ )
+        if( _Qa[alpha].vars().intersects( ns ) ) {
             if( props.init == Properties::InitType::UNIFORM )
-                alpha->fill( 1.0 / alpha->states() );
+                _Qa[alpha].setUniform();
             else
-                alpha->randomize();
+                _Qa[alpha].randomize();
+            _Qa[alpha] *= OR(alpha);
+            _Qa[alpha].normalize();
         }
 
     for( size_t beta = 0; beta < nrIRs(); beta++ )
@@ -222,24 +250,27 @@ void HAK::init( const VarSet &ns ) {
 
 
 void HAK::init() {
-    for( vector<Factor>::iterator alpha = _Qa.begin(); alpha != _Qa.end(); alpha++ )
+    for( size_t alpha = 0; alpha < nrORs(); alpha++ ) {
         if( props.init == Properties::InitType::UNIFORM )
-            alpha->fill( 1.0 / alpha->states() );
+            _Qa[alpha].setUniform();
         else
-            alpha->randomize();
+            _Qa[alpha].randomize();
+        _Qa[alpha] *= OR(alpha);
+        _Qa[alpha].normalize();
+    }
 
-    for( vector<Factor>::iterator beta = _Qb.begin(); beta != _Qb.end(); beta++ )
+    for( size_t beta = 0; beta < nrIRs(); beta++ )
         if( props.init == Properties::InitType::UNIFORM )
-            beta->fill( 1.0 / beta->states() );
+            _Qb[beta].setUniform();
         else
-            beta->randomize();
+            _Qb[beta].randomize();
 
     for( size_t alpha = 0; alpha < nrORs(); alpha++ )
         foreach( const Neighbor &beta, nbOR(alpha) ) {
             size_t _beta = beta.iter;
             if( props.init == Properties::InitType::UNIFORM ) {
-                muab( alpha, _beta ).fill( 1.0 / muab( alpha, _beta ).states() );
-                muba( alpha, _beta ).fill( 1.0 / muab( alpha, _beta ).states() );
+                muab( alpha, _beta ).setUniform();
+                muba( alpha, _beta ).setUniform();
             } else {
                 muab( alpha, _beta ).randomize();
                 muba( alpha, _beta ).randomize();
@@ -261,17 +292,19 @@ Real HAK::doGBP() {
         DAI_ASSERT( nbIR(beta).size() + IR(beta).c() != 0.0 );
 
     // Keep old beliefs to check convergence
-    vector<Factor> old_beliefs;
-    old_beliefs.reserve( nrVars() );
+    vector<Factor> oldBeliefsV;
+    oldBeliefsV.reserve( nrVars() );
     for( size_t i = 0; i < nrVars(); i++ )
-        old_beliefs.push_back( belief( var(i) ) );
-
-    // Differences in single node beliefs
-    Diffs diffs(nrVars(), 1.0);
+        oldBeliefsV.push_back( beliefV(i) );
+    vector<Factor> oldBeliefsF;
+    oldBeliefsF.reserve( nrFactors() );
+    for( size_t I = 0; I < nrFactors(); I++ )
+        oldBeliefsF.push_back( beliefF(I) );
 
     // do several passes over the network until maximum number of iterations has
     // been reached or until the maximum belief difference is smaller than tolerance
-    for( _iters = 0; _iters < props.maxiter && diffs.maxDiff() > props.tol; _iters++ ) {
+    Real maxDiff = INFINITY;
+    for( _iters = 0; _iters < props.maxiter && maxDiff > props.tol; _iters++ ) {
         for( size_t beta = 0; beta < nrIRs(); beta++ ) {
             foreach( const Neighbor &alpha, nbIR(beta) ) {
                 size_t _beta = alpha.dual;
@@ -344,24 +377,30 @@ Real HAK::doGBP() {
         }
 
         // Calculate new single variable beliefs and compare with old ones
-        for( size_t i = 0; i < nrVars(); i++ ) {
-            Factor new_belief = belief( var( i ) );
-            diffs.push( dist( new_belief, old_beliefs[i], Prob::DISTLINF ) );
-            old_beliefs[i] = new_belief;
+        maxDiff = -INFINITY;
+        for( size_t i = 0; i < nrVars(); ++i ) {
+            Factor b = beliefV(i);
+            maxDiff = std::max( maxDiff, dist( b, oldBeliefsV[i], Prob::DISTLINF ) );
+            oldBeliefsV[i] = b;
+        }
+        for( size_t I = 0; I < nrFactors(); ++I ) {
+            Factor b = beliefF(I);
+            maxDiff = std::max( maxDiff, dist( b, oldBeliefsF[I], Prob::DISTLINF ) );
+            oldBeliefsF[I] = b;
         }
 
         if( props.verbose >= 3 )
-            cerr << Name << "::doGBP:  maxdiff " << diffs.maxDiff() << " after " << _iters+1 << " passes" << endl;
+            cerr << Name << "::doGBP:  maxdiff " << maxDiff << " after " << _iters+1 << " passes" << endl;
     }
 
-    if( diffs.maxDiff() > _maxdiff )
-        _maxdiff = diffs.maxDiff();
+    if( maxDiff > _maxdiff )
+        _maxdiff = maxDiff;
 
     if( props.verbose >= 1 ) {
-        if( diffs.maxDiff() > props.tol ) {
+        if( maxDiff > props.tol ) {
             if( props.verbose == 1 )
                 cerr << endl;
-            cerr << Name << "::doGBP:  WARNING: not converged within " << props.maxiter << " passes (" << toc() - tic << " seconds)...final maxdiff:" << diffs.maxDiff() << endl;
+            cerr << Name << "::doGBP:  WARNING: not converged within " << props.maxiter << " passes (" << toc() - tic << " seconds)...final maxdiff:" << maxDiff << endl;
         } else {
             if( props.verbose >= 2 )
                 cerr << Name << "::doGBP:  ";
@@ -369,7 +408,7 @@ Real HAK::doGBP() {
         }
     }
 
-    return diffs.maxDiff();
+    return maxDiff;
 }
 
 
@@ -393,13 +432,14 @@ Real HAK::doDoubleLoop() {
     }
 
     // Keep old beliefs to check convergence
-    vector<Factor> old_beliefs;
-    old_beliefs.reserve( nrVars() );
+    vector<Factor> oldBeliefsV;
+    oldBeliefsV.reserve( nrVars() );
     for( size_t i = 0; i < nrVars(); i++ )
-        old_beliefs.push_back( belief( var(i) ) );
-
-    // Differences in single node beliefs
-    Diffs diffs(nrVars(), 1.0);
+        oldBeliefsV.push_back( beliefV(i) );
+    vector<Factor> oldBeliefsF;
+    oldBeliefsF.reserve( nrFactors() );
+    for( size_t I = 0; I < nrFactors(); I++ )
+        oldBeliefsF.push_back( beliefF(I) );
 
     size_t outer_maxiter   = props.maxiter;
     Real   outer_tol       = props.tol;
@@ -412,7 +452,8 @@ Real HAK::doDoubleLoop() {
 
     size_t outer_iter = 0;
     size_t total_iter = 0;
-    for( outer_iter = 0; outer_iter < outer_maxiter && diffs.maxDiff() > outer_tol; outer_iter++ ) {
+    Real maxDiff = INFINITY;
+    for( outer_iter = 0; outer_iter < outer_maxiter && maxDiff > outer_tol; outer_iter++ ) {
         // Calculate new outer regions
         for( size_t alpha = 0; alpha < nrORs(); alpha++ ) {
             OR(alpha) = org_ORs[alpha];
@@ -425,16 +466,22 @@ Real HAK::doDoubleLoop() {
             return 1.0;
 
         // Calculate new single variable beliefs and compare with old ones
+        maxDiff = -INFINITY;
         for( size_t i = 0; i < nrVars(); ++i ) {
-            Factor new_belief = belief( var( i ) );
-            diffs.push( dist( new_belief, old_beliefs[i], Prob::DISTLINF ) );
-            old_beliefs[i] = new_belief;
+            Factor b = beliefV(i);
+            maxDiff = std::max( maxDiff, dist( b, oldBeliefsV[i], Prob::DISTLINF ) );
+            oldBeliefsV[i] = b;
+        }
+        for( size_t I = 0; I < nrFactors(); ++I ) {
+            Factor b = beliefF(I);
+            maxDiff = std::max( maxDiff, dist( b, oldBeliefsF[I], Prob::DISTLINF ) );
+            oldBeliefsF[I] = b;
         }
 
         total_iter += Iterations();
 
         if( props.verbose >= 3 )
-            cerr << Name << "::doDoubleLoop:  maxdiff " << diffs.maxDiff() << " after " << total_iter << " passes" << endl;
+            cerr << Name << "::doDoubleLoop:  maxdiff " << maxDiff << " after " << total_iter << " passes" << endl;
     }
 
     // restore _maxiter, _verbose and _maxdiff
@@ -443,8 +490,8 @@ Real HAK::doDoubleLoop() {
     _maxdiff = org_maxdiff;
 
     _iters = total_iter;
-    if( diffs.maxDiff() > _maxdiff )
-        _maxdiff = diffs.maxDiff();
+    if( maxDiff > _maxdiff )
+        _maxdiff = maxDiff;
 
     // Restore original outer regions
     ORs = org_ORs;
@@ -454,10 +501,10 @@ Real HAK::doDoubleLoop() {
         IR(beta).c() = org_IR_cs[beta];
 
     if( props.verbose >= 1 ) {
-        if( diffs.maxDiff() > props.tol ) {
+        if( maxDiff > props.tol ) {
             if( props.verbose == 1 )
                 cerr << endl;
-                cerr << Name << "::doDoubleLoop:  WARNING: not converged within " << outer_maxiter << " passes (" << toc() - tic << " seconds)...final maxdiff:" << diffs.maxDiff() << endl;
+                cerr << Name << "::doDoubleLoop:  WARNING: not converged within " << outer_maxiter << " passes (" << toc() - tic << " seconds)...final maxdiff:" << maxDiff << endl;
             } else {
                 if( props.verbose >= 3 )
                     cerr << Name << "::doDoubleLoop:  ";
@@ -465,7 +512,7 @@ Real HAK::doDoubleLoop() {
             }
         }
 
-    return diffs.maxDiff();
+    return maxDiff;
 }
 
 
@@ -489,14 +536,10 @@ Factor HAK::belief( const VarSet &ns ) const {
         for( alpha = _Qa.begin(); alpha != _Qa.end(); alpha++ )
             if( alpha->vars() >> ns )
                 break;
-        DAI_ASSERT( alpha != _Qa.end() );
+        if( alpha == _Qa.end() )
+            DAI_THROW(BELIEF_NOT_AVAILABLE);
         return( alpha->marginal(ns) );
     }
-}
-
-
-Factor HAK::belief( const Var &n ) const {
-    return belief( (VarSet)n );
 }
 
 

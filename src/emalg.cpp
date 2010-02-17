@@ -16,12 +16,13 @@
 namespace dai {
 
 
+// Initialize static private member of ParameterEstimation
 std::map<std::string, ParameterEstimation::ParamEstFactory> *ParameterEstimation::_registry = NULL;
 
 
 void ParameterEstimation::loadDefaultRegistry() {
     _registry = new std::map<std::string, ParamEstFactory>();
-    (*_registry)["ConditionalProbEstimation"] = CondProbEstimation::factory;
+    (*_registry)["CondProbEstimation"] = CondProbEstimation::factory;
 }
 
 
@@ -62,8 +63,8 @@ Prob CondProbEstimation::estimate() {
     // normalize pseudocounts
     for( size_t parent = 0; parent < _stats.size(); parent += _target_dim ) {
         // calculate norm
-        Real norm = 0.0;
         size_t top = parent + _target_dim;
+        Real norm = 0.0;
         for( size_t i = parent; i < top; ++i )
             norm += _stats[i];
         if( norm != 0.0 )
@@ -79,25 +80,9 @@ Prob CondProbEstimation::estimate() {
 }
 
 
-Permute SharedParameters::calculatePermutation( const std::vector<Var> &varorder, VarSet &outVS ) {
-    // Collect all labels and dimensions, and order them in vs
-    std::vector<size_t> dims;
-    dims.reserve( varorder.size() );
-    std::vector<long> labels;
-    labels.reserve( varorder.size() );
-    for( size_t i = 0; i < varorder.size(); i++ ) {
-        dims.push_back( varorder[i].states() );
-        labels.push_back( varorder[i].label() );
-        outVS |= varorder[i];
-    }
-
-    // Construct the sigma array for the permutation object
-    std::vector<size_t> sigma;
-    sigma.reserve( dims.size() );
-    for( VarSet::iterator set_iterator = outVS.begin(); sigma.size() < dims.size(); ++set_iterator )
-        sigma.push_back( find(labels.begin(), labels.end(), set_iterator->label()) - labels.begin() );
-
-    return Permute( dims, sigma );
+Permute SharedParameters::calculatePermutation( const std::vector<Var> &varOrder, VarSet &outVS ) {
+    outVS = VarSet( varOrder.begin(), varOrder.end(), varOrder.size() );
+    return Permute( varOrder );
 }
 
 
@@ -116,8 +101,16 @@ void SharedParameters::setPermsAndVarSetsFromVarOrders() {
 }
 
 
-SharedParameters::SharedParameters( std::istream &is, const FactorGraph &fg_varlookup )
-  : _varsets(), _perms(), _varorders(), _estimation(NULL), _deleteEstimation(true)
+SharedParameters::SharedParameters( const FactorOrientations &varorders, ParameterEstimation *estimation, bool ownPE )
+  : _varsets(), _perms(), _varorders(varorders), _estimation(estimation), _ownEstimation(ownPE)
+{
+    // Calculate the necessary permutations and varsets
+    setPermsAndVarSetsFromVarOrders();
+}
+
+
+SharedParameters::SharedParameters( std::istream &is, const FactorGraph &fg )
+  : _varsets(), _perms(), _varorders(), _estimation(NULL), _ownEstimation(true)
 {
     // Read the desired parameter estimation method from the stream
     std::string est_method;
@@ -141,21 +134,21 @@ SharedParameters::SharedParameters( std::istream &is, const FactorGraph &fg_varl
 
         // Lookup the factor in the factorgraph
         if( fields.size() < 1 )
-            DAI_THROW(INVALID_EMALG_FILE);
+            DAI_THROWE(INVALID_EMALG_FILE,"Empty line unexpected");
         std::istringstream iss;
         iss.str( fields[0] );
         size_t factor;
         iss >> factor;
-        const VarSet &vs = fg_varlookup.factor(factor).vars();
+        const VarSet &vs = fg.factor(factor).vars();
         if( fields.size() != vs.size() + 1 )
-            DAI_THROW(INVALID_EMALG_FILE);
+            DAI_THROWE(INVALID_EMALG_FILE,"Number of fields does not match factor size");
 
         // Construct the vector of Vars
         std::vector<Var> var_order;
         var_order.reserve( vs.size() );
         for( size_t fi = 1; fi < fields.size(); ++fi ) {
             // Lookup a single variable by label
-            long label;
+            size_t label;
             std::istringstream labelparse( fields[fi] );
             labelparse >> label;
             VarSet::const_iterator vsi = vs.begin();
@@ -163,29 +156,12 @@ SharedParameters::SharedParameters( std::istream &is, const FactorGraph &fg_varl
                 if( vsi->label() == label )
                     break;
             if( vsi == vs.end() )
-                DAI_THROW(INVALID_EMALG_FILE);
+                DAI_THROWE(INVALID_EMALG_FILE,"Specified variables do not match the factor variables");
             var_order.push_back( *vsi );
         }
         _varorders[factor] = var_order;
     }
 
-    // Calculate the necessary permutations
-    setPermsAndVarSetsFromVarOrders();
-}
-
-
-SharedParameters::SharedParameters( const SharedParameters &sp )
-  : _varsets(sp._varsets), _perms(sp._perms), _varorders(sp._varorders), _estimation(sp._estimation), _deleteEstimation(sp._deleteEstimation)
-{
-    // If sp owns its _estimation object, we should clone it instead
-    if( _deleteEstimation )
-        _estimation = _estimation->clone();
-}
-
-
-SharedParameters::SharedParameters( const FactorOrientations &varorders, ParameterEstimation *estimation, bool deletePE )
-  : _varsets(), _perms(), _varorders(varorders), _estimation(estimation), _deleteEstimation(deletePE)
-{
     // Calculate the necessary permutations
     setPermsAndVarSetsFromVarOrders();
 }
@@ -199,7 +175,7 @@ void SharedParameters::collectSufficientStatistics( InfAlg &alg ) {
         Factor b = alg.belief(vs);
         Prob p( b.states(), 0.0 );
         for( size_t entry = 0; entry < b.states(); ++entry )
-            p.set( entry, b[perm.convertLinearIndex(entry)] );
+            p.set( entry, b[perm.convertLinearIndex(entry)] ); // apply inverse permutation
         _estimation->addSufficientStatistics( p );
     }
 }
@@ -217,22 +193,6 @@ void SharedParameters::setParameters( FactorGraph &fg ) {
 
         fg.setFactor( i->first, f );
     }
-}
-
-
-void SharedParameters::collectParameters( const FactorGraph &fg, std::vector<Real> &outVals, std::vector<Var> &outVarOrder ) {
-    FactorOrientations::iterator it = _varorders.begin();
-    if( it == _varorders.end() )
-        return;
-    FactorIndex I = it->first;
-    for( std::vector<Var>::const_iterator var_it = _varorders[I].begin(); var_it != _varorders[I].end(); ++var_it )
-        outVarOrder.push_back( *var_it );
-
-    const Factor &f = fg.factor(I);
-    DAI_ASSERT( f.vars() == _varsets[I] );
-    const Permute &perm = _perms[I];
-    for( size_t val_index = 0; val_index < f.states(); ++val_index )
-        outVals.push_back( f[perm.convertLinearIndex(val_index)] );
 }
 
 
@@ -316,7 +276,9 @@ Real EMAlg::iterate( MaximizationStep &mstep ) {
     // Expectation calculation
     for( Evidence::const_iterator e = _evidence.begin(); e != _evidence.end(); ++e ) {
         InfAlg* clamped = _estep.clone();
-        e->applyEvidence( *clamped );
+        // Apply evidence
+        for( Evidence::Observation::const_iterator i = e->begin(); i != e->end(); ++i )
+            clamped->clamp( clamped->fg().findVar(i->first), i->second );
         clamped->init();
         clamped->run();
 

@@ -36,8 +36,8 @@ namespace dai {
  *      IndexFor i( indexVars, forVars );
  *      size_t iter = 0;
  *      for( ; i.valid(); i++, iter++ ) {
- *          cout << "State of forVars: " << forVars.calcStates( iter ) << "; ";
- *          cout << "state of indexVars: " << indexVars.calcStates( long(i) ) << endl;
+ *          cout << "State of forVars: " << calcState( forVars, iter ) << "; ";
+ *          cout << "state of indexVars: " << calcState( indexVars, long(i) ) << endl;
  *      }
  *  \endcode
  *  loops over all joint states of the variables in \a forVars,
@@ -96,20 +96,11 @@ class IndexFor {
             return( *this );
         }
 
-        // OBSOLETE
-        /// Conversion to \c long: returns linear index of the current state of indexVars
-        operator long () const {
-            return( _index );
-        }
-
-        // NEW VERSION
-        /*
         /// Conversion to \c size_t: returns linear index of the current state of indexVars
         operator size_t() const {
             DAI_ASSERT( valid() );
             return( _index );
         }
-        */
 
         /// Increments the current state of \a forVars (prefix)
         IndexFor& operator++ () {
@@ -203,10 +194,6 @@ class Permute {
 
             return sigma_li;
         }
-
-        // OBSOLETE
-        /// For backwards compatibility (to be removed soon)
-        size_t convert_linear_index( size_t li ) const { return convertLinearIndex(li); }
 
         /// Returns const reference to the permutation
         const std::vector<size_t>& sigma() const { return _sigma; }
@@ -316,16 +303,17 @@ class multifor {
  *  }
  *  \endcode
  *
- *  \note The same functionality could be achieved by simply iterating over the linear state and using VarSet::calcStates,
+ *  \note The same functionality could be achieved by simply iterating over the linear state and using dai::calcState(),
  *  but the State class offers a more efficient implementation.
  *
  *  \note A State is very similar to a \link multifor \endlink, but tailored for Var 's and VarSet 's.
  *
- *  \see VarSet::calcState(), VarSet::calcStates()
+ *  \see dai::calcLinearState(), dai::calcState()
  *
- *  \todo Rename VarSet::calcState(), VarSet::calcStates() and make them non-member functions;
- *        make the State class a more prominent part of libDAI (and document it clearly, explaining
- *        the concept of state); add more optimized variants of the State class like IndexFor (e.g. for TFactor<>::slice()).
+ *  \idea Make the State class a more prominent part of libDAI 
+ *  (and document it clearly, explaining the concept of state); 
+ *  add more optimized variants of the State class like IndexFor 
+ *  (e.g. for TFactor<>::slice()).
  */
 class State {
     private:
@@ -388,10 +376,10 @@ class State {
         }
 
         /// Return current state represented as a map
-        const states_type& get() const { return states; }
+        const std::map<Var,size_t>& get() const { return states; }
 
         /// Cast into std::map<Var, size_t>
-        operator const states_type& () const { return states; }
+        operator const std::map<Var,size_t>& () const { return states; }
 
         /// Return current state of variable \a v, or 0 if \a v is not in \c *this
         size_t operator() ( const Var &v ) const {

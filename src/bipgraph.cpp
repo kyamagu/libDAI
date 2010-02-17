@@ -4,7 +4,7 @@
  *  2, or (at your option) any later version. libDAI is distributed without any
  *  warranty. See the file COPYING for more details.
  *
- *  Copyright (C) 2006-2009  Joris Mooij  [joris dot mooij at libdai dot org]
+ *  Copyright (C) 2006-2010  Joris Mooij  [joris dot mooij at libdai dot org]
  *  Copyright (C) 2006-2007  Radboud University Nijmegen, The Netherlands
  */
 
@@ -19,8 +19,8 @@ using namespace std;
 
 
 void BipartiteGraph::addEdge( size_t n1, size_t n2, bool check ) {
-    DAI_ASSERT( n1 < nr1() );
-    DAI_ASSERT( n2 < nr2() );
+    DAI_ASSERT( n1 < nrNodes1() );
+    DAI_ASSERT( n2 < nrNodes2() );
     bool exists = false;
     if( check ) {
         // Check whether the edge already exists
@@ -39,12 +39,12 @@ void BipartiteGraph::addEdge( size_t n1, size_t n2, bool check ) {
 }
 
 
-void BipartiteGraph::erase1( size_t n1 ) {
-    DAI_ASSERT( n1 < nr1() );
+void BipartiteGraph::eraseNode1( size_t n1 ) {
+    DAI_ASSERT( n1 < nrNodes1() );
     // Erase neighbor entry of node n1
     _nb1.erase( _nb1.begin() + n1 );
     // Adjust neighbor entries of nodes of type 2
-    for( size_t n2 = 0; n2 < nr2(); n2++ ) {
+    for( size_t n2 = 0; n2 < nrNodes2(); n2++ ) {
         for( size_t iter = 0; iter < nb2(n2).size(); ) {
             Neighbor &m1 = nb2(n2, iter);
             if( m1.node == n1 ) {
@@ -65,12 +65,12 @@ void BipartiteGraph::erase1( size_t n1 ) {
 }
 
 
-void BipartiteGraph::erase2( size_t n2 ) {
-    DAI_ASSERT( n2 < nr2() );
+void BipartiteGraph::eraseNode2( size_t n2 ) {
+    DAI_ASSERT( n2 < nrNodes2() );
     // Erase neighbor entry of node n2
     _nb2.erase( _nb2.begin() + n2 );
     // Adjust neighbor entries of nodes of type 1
-    for( size_t n1 = 0; n1 < nr1(); n1++ ) {
+    for( size_t n1 = 0; n1 < nrNodes1(); n1++ ) {
         for( size_t iter = 0; iter < nb1(n1).size(); ) {
             Neighbor &m2 = nb1(n1, iter);
             if( m2.node == n2 ) {
@@ -92,8 +92,8 @@ void BipartiteGraph::erase2( size_t n2 ) {
 
 
 void BipartiteGraph::eraseEdge( size_t n1, size_t n2 ) {
-    DAI_ASSERT( n1 < nr1() );
-    DAI_ASSERT( n2 < nr2() );
+    DAI_ASSERT( n1 < nrNodes1() );
+    DAI_ASSERT( n2 < nrNodes2() );
     size_t iter;
     // Search for edge among neighbors of n1
     for( iter = 0; iter < nb1(n1).size(); iter++ )
@@ -153,14 +153,33 @@ std::vector<size_t> BipartiteGraph::delta2( size_t n2, bool include ) const {
 
 
 bool BipartiteGraph::isConnected() const {
-    // TODO: use BGL, like:
-    // std::vector<int> component( num_vertices( g ) );
-    // int num_comp = connected_components( g, make_iterator_property_map(component.begin(), get(vertex_index, g)) );
-    if( nr1() == 0 ) {
+    if( nrNodes1() == 0 ) {
         return true;
     } else {
-        std::vector<bool> incomponent1( nr1(), false );
-        std::vector<bool> incomponent2( nr2(), false );
+        /*
+        // The BGL implementation is significantly slower...
+        using namespace boost;
+        typedef adjacency_list< vecS, vecS, undirectedS, property<vertex_distance_t, int> > boostGraph;
+        typedef pair<size_t, size_t> E;
+
+        // Copy graph structure into boostGraph object
+        size_t N = nrNodes1();
+        vector<E> edges;
+        edges.reserve( nrEdges() );
+        for( size_t n1 = 0; n1 < nrNodes1(); n1++ )
+            foreach( const Neighbor &n2, nb1(n1) )
+                edges.push_back( E( n1, n2.node + N ) );
+        boostGraph g( edges.begin(), edges.end(), nrNodes1() + nrNodes2() );
+
+        // Construct connected components using Boost Graph Library
+        std::vector<int> component( num_vertices( g ) );
+        int num_comp = connected_components( g, make_iterator_property_map(component.begin(), get(vertex_index, g)) );
+
+        return (num_comp == 1);
+        */
+
+        std::vector<bool> incomponent1( nrNodes1(), false );
+        std::vector<bool> incomponent2( nrNodes2(), false );
 
         incomponent1[0] = true;
         bool found_new_nodes;
@@ -168,7 +187,7 @@ bool BipartiteGraph::isConnected() const {
             found_new_nodes = false;
 
             // For all nodes of type 2, check if they are connected with the (growing) component
-            for( size_t n2 = 0; n2 < nr2(); n2++ )
+            for( size_t n2 = 0; n2 < nrNodes2(); n2++ )
                 if( !incomponent2[n2] ) {
                     foreach( const Neighbor &n1, nb2(n2) ) {
                         if( incomponent1[n1] ) {
@@ -180,7 +199,7 @@ bool BipartiteGraph::isConnected() const {
                 }
 
             // For all nodes of type 1, check if they are connected with the (growing) component
-            for( size_t n1 = 0; n1 < nr1(); n1++ )
+            for( size_t n1 = 0; n1 < nrNodes1(); n1++ )
                 if( !incomponent1[n1] ) {
                     foreach( const Neighbor &n2, nb1(n1) ) {
                         if( incomponent2[n2] ) {
@@ -194,10 +213,10 @@ bool BipartiteGraph::isConnected() const {
 
         // Check if there are remaining nodes (not in the component)
         bool all_connected = true;
-        for( size_t n1 = 0; (n1 < nr1()) && all_connected; n1++ )
+        for( size_t n1 = 0; (n1 < nrNodes1()) && all_connected; n1++ )
             if( !incomponent1[n1] )
                 all_connected = false;
-        for( size_t n2 = 0; (n2 < nr2()) && all_connected; n2++ )
+        for( size_t n2 = 0; (n2 < nrNodes2()) && all_connected; n2++ )
             if( !incomponent2[n2] )
                 all_connected = false;
 
@@ -214,7 +233,7 @@ bool BipartiteGraph::isTree() const {
     size_t nr_1 = 0;
     size_t nr_2 = 0;
 
-    if( nr1() == 0 || nr2() == 0 )
+    if( nrNodes1() == 0 || nrNodes2() == 0 )
         return true;
     else {
         levelType newLevel;
@@ -266,7 +285,7 @@ bool BipartiteGraph::isTree() const {
             nr_1 += newLevel.ind1.size();
             nr_2 += newLevel.ind2.size();
         } while( ((newLevel.ind1.size() != 0) || (newLevel.ind2.size() != 0)) && !foundCycle );
-        if( nr_1 == nr1() && nr_2 == nr2() && !foundCycle )
+        if( nr_1 == nrNodes1() && nr_2 == nrNodes2() && !foundCycle )
             return true;
         else
             return false;
@@ -278,12 +297,12 @@ void BipartiteGraph::printDot( std::ostream& os ) const {
     using namespace std;
     os << "graph G {" << endl;
     os << "node[shape=circle,width=0.4,fixedsize=true];" << endl;
-    for( size_t n1 = 0; n1 < nr1(); n1++ )
+    for( size_t n1 = 0; n1 < nrNodes1(); n1++ )
         os << "\tx" << n1 << ";" << endl;
     os << "node[shape=box,width=0.3,height=0.3,fixedsize=true];" << endl;
-    for( size_t n2 = 0; n2 < nr2(); n2++ )
+    for( size_t n2 = 0; n2 < nrNodes2(); n2++ )
         os << "\ty" << n2 << ";" << endl;
-    for( size_t n1 = 0; n1 < nr1(); n1++ )
+    for( size_t n1 = 0; n1 < nrNodes1(); n1++ )
         foreach( const Neighbor &n2, nb1(n1) )
             os << "\tx" << n1 << " -- y" << n2 << ";" << endl;
     os << "}" << endl;
@@ -291,8 +310,8 @@ void BipartiteGraph::printDot( std::ostream& os ) const {
 
 
 void BipartiteGraph::checkConsistency() const {
-    size_t N1 = nr1();
-    size_t N2 = nr2();
+    size_t N1 = nrNodes1();
+    size_t N2 = nrNodes2();
     for( size_t n1 = 0; n1 < N1; n1++ ) {
         size_t iter = 0;
         foreach( const Neighbor &n2, nb1(n1) ) {

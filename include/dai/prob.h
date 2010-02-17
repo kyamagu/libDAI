@@ -10,7 +10,7 @@
 
 
 /// \file
-/// \brief Defines TProb<> and Prob classes which represent (probability) vectors
+/// \brief Defines TProb<> and Prob classes which represent (probability) vectors (e.g., probability distributions of discrete random variables)
 
 
 #ifndef __defined_libdai_prob_h
@@ -60,8 +60,9 @@ template <typename T> class TProb {
          *  - DISTLINF is the \f$\ell_\infty\f$ distance (maximum absolute value of pointwise difference);
          *  - DISTTV is the total variation distance (half of the \f$\ell_1\f$ distance);
          *  - DISTKL is the Kullback-Leibler distance (\f$\sum_i p_i (\log p_i - \log q_i)\f$).
+         *  - DISTHEL is the Hellinger distance (\f$\frac{1}{2}\sum_i (\sqrt{p_i}-\sqrt{q_i})^2\f$).
          */
-        typedef enum { DISTL1, DISTLINF, DISTTV, DISTKL } DistType;
+        typedef enum { DISTL1, DISTLINF, DISTTV, DISTKL, DISTHEL } DistType;
 
     /// \name Constructors and destructors
     //@{
@@ -106,7 +107,7 @@ template <typename T> class TProb {
         /// Reverse iterator over the elements
         typedef typename std::vector<T>::reverse_iterator reverse_iterator;
 
-    /// @name Iterator interface
+    /// \name Iterator interface
     //@{
         /// Returns iterator that points to the first element
         iterator begin() { return _p.begin(); }
@@ -244,23 +245,8 @@ template <typename T> class TProb {
             return r;
         }
 
-        // OBSOLETE
-        /// Returns pointwise signum
-        /** \note Obsolete, to be removed soon
-         */
-        TProb<T> sgn() const {
-            TProb<T> x;
-            x._p.reserve( size() );
-            for( size_t i = 0; i < size(); i++ ) {
-                T s = 0;
-                if( _p[i] > 0 )
-                    s = 1;
-                else if( _p[i] < 0 )
-                    s = -1;
-                x._p.push_back( s );
-            }
-            return x;
-        }
+        /// Returns negative of \c *this
+        TProb<T> operator- () const { return pwUnaryTr( std::negate<T>() ); }
 
         /// Returns pointwise absolute value
         TProb<T> abs() const { return pwUnaryTr( fo_abs<T>() ); }
@@ -277,7 +263,7 @@ template <typename T> class TProb {
             else
                 return pwUnaryTr( fo_log<T>() );
         }
-
+        
         /// Returns pointwise inverse
         /** If \a zero == \c true, uses <tt>1/0==0</tt>; otherwise, <tt>1/0==Inf</tt>.
          */
@@ -289,6 +275,8 @@ template <typename T> class TProb {
         }
 
         /// Returns normalized copy of \c *this, using the specified norm
+        /** \throw NOT_NORMALIZABLE if the norm is zero
+         */
         TProb<T> normalized( NormType norm = NORMPROB ) const {
             T Z = 0;
             if( norm == NORMPROB )
@@ -340,6 +328,8 @@ template <typename T> class TProb {
         }
 
         /// Normalizes vector using the specified norm
+        /** \throw NOT_NORMALIZABLE if the norm is zero
+         */
         T normalize( NormType norm=NORMPROB ) {
             T Z = 0;
             if( norm == NORMPROB )
@@ -359,28 +349,6 @@ template <typename T> class TProb {
         /// Sets all entries to \a x
         TProb<T> & fill(T x) {
             std::fill( _p.begin(), _p.end(), x );
-            return *this;
-        }
-
-        // OBSOLETE
-        /// Sets entries that are smaller (in absolute value) than \a epsilon to 0
-        /** \note Obsolete, to be removed soon
-         */
-        TProb<T>& makeZero( T epsilon ) {
-            for( size_t i = 0; i < size(); i++ )
-                if( (_p[i] < epsilon) && (_p[i] > -epsilon) )
-                    _p[i] = 0;
-            return *this;
-        }
-        
-        // OBSOLETE
-        /// Sets entries that are smaller than \a epsilon to \a epsilon
-        /** \note Obsolete, to be removed soon
-         */
-        TProb<T>& makePositive( T epsilon ) {
-            for( size_t i = 0; i < size(); i++ )
-                if( (0 < _p[i]) && (_p[i] < epsilon) )
-                    _p[i] = epsilon;
             return *this;
         }
 
@@ -562,6 +530,8 @@ template<typename T> T dist( const TProb<T> &p, const TProb<T> &q, typename TPro
             return p.innerProduct( q, (T)0, std::plus<T>(), fo_absdiff<T>() ) / 2;
         case TProb<T>::DISTKL:
             return p.innerProduct( q, (T)0, std::plus<T>(), fo_KL<T>() );
+        case TProb<T>::DISTHEL:
+            return p.innerProduct( q, (T)0, std::plus<T>(), fo_Hellinger<T>() ) / 2;
         default:
             DAI_THROW(UNKNOWN_ENUM_VALUE);
             return INFINITY;
