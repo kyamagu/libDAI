@@ -26,36 +26,11 @@
 #include <typeinfo>
 #include <dai/util.h>
 #include <dai/exceptions.h>
+#include <dai/spvector.h>
 #include <dai/fo.h>
 
 
 namespace dai {
-
-
-/// Index-value pair representing an entry of a sparse vector
-template <typename T> 
-class SpElem : public std::pair<size_t, T> {
-    public:
-        SpElem( const size_t &idx, const T &val ) : std::pair<size_t,T>(idx,val) {}
-        bool operator != ( const SpElem<T> &v ) { return ( ((*this).first != v.idx()) || ((*this).second != v.val()) ); }
-        void setVal( const T &val ) { (*this).second = val; }
-};
-
-
-/// Function object that compares the indices of two index-value pairs
-template <typename T>
-struct LessSpIdx : public std::binary_function<const SpElem<T> &, const SpElem<T> &, bool> {
-    bool operator()( const SpElem<T> &a, const SpElem<T> &b ) { return a.first < b.first; }
-};
-
-
-/// Writes a SpElem<T> to an output stream
-/** \relates SpElem
- */
-//template<typename T> std::ostream& operator<< (std::ostream& os, const SpElem<T>& p) {
-//    os << "[" << p.first << ", " << p.second << "]";
-//    return os;
-//}
 
 
 /// Represents a vector with entries of type \a T.
@@ -67,19 +42,15 @@ struct LessSpIdx : public std::binary_function<const SpElem<T> &, const SpElem<T
  *
  *  \tparam T Should be a scalar that is castable from and to dai::Real and should support elementary arithmetic operations.
  */
-template <typename T> class TProbSpV {
-    private:
-        /// The map containing non-default elements
-        std::vector<SpElem<T> > _p;
-        /// Indices range from 0, 1, ..., _size - 1
-        size_t              _size;
-        /// Default value
-        T                   _def;
+template <typename T>
+class TProbSpV {
+    public:
+        /// Type used to represent the sparse vector
+        typedef spvector<T> spvector_type;
 
-        /// Returns number of default values
-        size_t nrDefault() const {
-            return _size - _p.size();
-        }
+    private:
+        /// The sparse vector containing nondefault elements
+        spvector_type _p;
 
     public:
         /// Enumerates different ways of normalizing a probability measure.
@@ -94,67 +65,49 @@ template <typename T> class TProbSpV {
          *  - DISTLINF is the \f$\ell_\infty\f$ distance (maximum absolute value of pointwise difference);
          *  - DISTTV is the total variation distance (half of the \f$\ell_1\f$ distance);
          *  - DISTKL is the Kullback-Leibler distance (\f$\sum_i p_i (\log p_i - \log q_i)\f$).
+         *  - DISTHEL is the Hellinger distance (\f$\frac{1}{2}\sum_i (\sqrt{p_i}-\sqrt{q_i})^2\f$).
          */
-        typedef enum { DISTL1, DISTLINF, DISTTV, DISTKL } DistType;
+        typedef enum { DISTL1, DISTLINF, DISTTV, DISTKL, DISTHEL } DistType;
 
     /// \name Constructors and destructors
     //@{
         /// Default constructor (constructs empty vector)
-        TProbSpV() : _p(), _size(0), _def(0) {}
+        TProbSpV() : _p() {}
 
         /// Construct uniform probability distribution over \a n outcomes (i.e., a vector of length \a n with each entry set to \f$1/n\f$)
-        explicit TProbSpV( size_t n ) : _p(), _size(n) {
-            _def = (T)1 / n;
-        }
+        explicit TProbSpV( size_t n ) : _p( n, (T)1 / n ) {}
 
         /// Construct vector of length \a n with each entry set to \a p
-        explicit TProbSpV( size_t n, T p ) : _p(), _size(n), _def(p) {}
+        explicit TProbSpV( size_t n, T p ) : _p( n, p ) {}
 
         /// Construct sparse vector from a range
         /** \tparam TIterator Iterates over instances that can be cast to \a T
          *  \param begin Points to first instance to be added.
          *  \param end Points just beyond last instance to be added.
-         *  \param sizeHint For efficiency, the number of entries can be speficied by \a sizeHint.
-         *  \note Assumes range sorted (in index)
+         *  \param def Default value to use for the constructed sparse vector.
+         *  \param sizeHint For efficiency, the number of nondefault entries can be speficied by \a sizeHint.
          */
         template <typename TIterator>
-        TProbSpV( TIterator begin, TIterator end, size_t sizeHint=0 ) : _p(), _size(0), _def(0) {
-            size_t iter = 0;
-            for( TIterator it = begin; it != end; it++, iter++ )
-                if( *it != _def )
-                    _p.push_back( SpElem<T>(iter, *it) );
-            _size = iter;
-        }
-
-        /// Construct sparse vector from another sparse vector
-        /** \param v sparse vector used for initialization
-         */
-        TProbSpV( const std::vector<SpElem<T> > &v ) : _p(), _size(v.size()), _def(0) {
-            for( size_t i = 0; i < v.size(); i++ )
-                if( v[i].second != _def ) 
-                    _p.push_back( SpElem<T>(v[i].first, v[i].second) );
-        }
+        TProbSpV( TIterator begin, TIterator end, T def=0, size_t sizeHint=0 ) : _p( begin, end, def, sizeHint ) {}
 
         /// Construct vector from another vector
         /** \tparam S type of elements in \a v (should be castable to type \a T)
-         *  \param v vector used for initialization
+         *  \param v vector used for initialization.
+         *  \param def Default value to used for the constructed sparse vector.
+         *  \param sizeHint For efficiency, the number of nondefault entries can be speficied by \a sizeHint.
          */
         template <typename S>
-        TProbSpV( const std::vector<S> &v ) : _p(), _size(v.size()), _def(0) {
-            for( size_t i = 0; i < v.size(); i++ )
-                if( v[i] != _def )
-                    _p.push_back( SpElem<T>(i, v[i]) );
-        }
+        TProbSpV( const std::vector<S> &v, T def=0, size_t sizeHint=0 ) : _p( v, def, sizeHint ) {}
     //@}
 
         /// Constant iterator over the elements
-        typedef typename std::vector<SpElem<T> >::const_iterator const_iterator;
+        typedef typename spvector_type::const_iterator const_iterator;
         /// Iterator over the elements
-        typedef typename std::vector<SpElem<T> >::iterator iterator;
+        typedef typename spvector_type::iterator iterator;
         /// Constant reverse iterator over the elements
-        typedef typename std::vector<SpElem<T> >::const_reverse_iterator const_reverse_iterator;
+        typedef typename spvector_type::const_reverse_iterator const_reverse_iterator;
         /// Reverse iterator over the elements
-        typedef typename std::vector<SpElem<T> >::reverse_iterator reverse_iterator;
+        typedef typename spvector_type::reverse_iterator reverse_iterator;
 
     /// @name Iterator interface
     //@{
@@ -180,57 +133,36 @@ template <typename T> class TProbSpV {
     //@}
 
         /// Gets \a i 'th entry
-        T get( size_t i ) const { return this->operator[](i); }
+        T get( size_t i ) const { return _p[i]; }
 
         /// Sets \a i 'th entry to \a val
-        void set( size_t i, T val ) {
-            DAI_DEBASSERT( i < _size );
-            if( val != _def ) {
-                iterator it = lower_bound( _p.begin(), _p.end(), SpElem<T>(i, 0.), LessSpIdx<T>() );
-                if ( it != _p.end() && ( it->first == i ) )
-                    _p[ distance( _p.begin(), it) ].setVal( val );
-                else 
-                    _p.insert( _p.begin()+distance(_p.begin(), it), SpElem<T>( i, val ) );
-            }
-        }
-
-        /// Erases the element with index \a idx and returns a pointer to the next element.
-        /** Implements the std::map::erase for the std::vector representation
-         */
-        iterator erase( const size_t &idx ) {
-            iterator it = lower_bound( _p.begin(), _p.end(), SpElem<T>(idx, 0.), LessSpIdx<T>() );
-            if ( it != _p.end() && ( it->first == idx ) )
-                return _p.erase(it);
-            else
-                return it;
-        }
+        void set( size_t i, T val ) { _p.set( i, val ); }
 
     /// \name Queries
     //@{
         /// Returns a const reference to the wrapped map
-        const std::vector<SpElem<T> > & p() const { return _p; }
+        const spvector_type & p() const { return _p; }
 
         /// Returns a reference to the wrapped map
-        std::vector<SpElem<T> > & p() { return _p; }
+        spvector_type & p() { return _p; }
 
         /// Returns a copy of the \a i 'th entry
-        T operator[]( size_t i ) const {
-            DAI_DEBASSERT( i < _size );
-            const_iterator it = lower_bound( _p.begin(), _p.end(), SpElem<T>(i, 0.), LessSpIdx<T>() );
-            if( (it != _p.end()) && (it->first == i) )
-                return _p[ distance( _p.begin(), it) ].second;
-            else 
-                return _def;
-        }
+        T operator[]( size_t i ) const { return _p[i]; }
 
         /// Returns length of the vector (i.e., the number of entries)
-        size_t size() const { return _size; }
+        size_t size() const { return _p.size(); }
 
-        /// Returns number of non-default values
-        size_t nrNonDef() const { return _p.size(); }
+        /// Returns number of default values
+        size_t nrDef() const { return _p.nrDef(); }
+
+        /// Returns number of nondefault values
+        size_t nrNonDef() const { return _p.nrNonDef(); }
 
         /// Returns default value
-        T def() const { return _def; }
+        T def() const { return _p.def(); }
+
+        /// Sets default value
+        void setDef( T def ) { _p.setDef( def ); }
 
         /// Accumulate over all values, similar to std::accumulate
         template<typename binOp, typename unOp> T accumulate( T init, binOp op1, unOp op2 ) const {
@@ -238,10 +170,10 @@ template <typename T> class TProbSpV {
             for( const_iterator it = begin(); it != end(); it++ )
                 t = op1( t, op2(it->second) );
             if( typeid(op1) == typeid(std::plus<T>()) )
-                t += nrDefault() * op2(_def);
+                t += nrDef() * op2(def());
             else
-                if( nrDefault() )
-                    t = op1( t, op2(_def) );
+                if( nrDef() )
+                    t = op1( t, op2(def()) );
             return t;
         }
 
@@ -265,7 +197,7 @@ template <typename T> class TProbSpV {
 
         /// Returns \c true if one or more entries are NaN
         bool hasNaNs() const {
-            if( isnan( _def ) && nrDefault() )
+            if( isnan( def() ) && nrDef() )
                 return true;
             else {
                 bool foundnan = false;
@@ -280,7 +212,7 @@ template <typename T> class TProbSpV {
 
         /// Returns \c true if one or more entries are negative
         bool hasNegatives() const {
-            if( (_def < 0) && nrDefault() )
+            if( (def() < 0) && nrDef() )
                 return true;
             else {
                 bool foundnegative = false;
@@ -297,11 +229,11 @@ template <typename T> class TProbSpV {
         std::pair<size_t,T> argmax() const {
             T max;
             size_t arg;
-            DAI_ASSERT( _size );
-            if( nrDefault() == _size ) {
-                max = _def;
+            DAI_ASSERT( size() );
+            if( nrDef() == size() ) {
+                max = def();
                 arg = 0;
-            } else if( nrDefault() > 0 ) {
+            } else if( nrDef() > 0 ) {
                 max = begin()->second;
                 arg = begin()->first;
                 size_t i = 0;
@@ -315,8 +247,8 @@ template <typename T> class TProbSpV {
                         argdef = i;
                     i = it->first + 1;
                 }
-                if( _def > max ) {
-                    max = _def;
+                if( def() > max ) {
+                    max = def();
                     arg = argdef;
                 }
             } else {
@@ -360,15 +292,18 @@ template <typename T> class TProbSpV {
         /// Returns the result of applying operation \a op pointwise on \c *this
         template<typename unaryOp> TProbSpV<T> pwUnaryTr( unaryOp op ) const {
             TProbSpV<T> r;
-            r._def = op( _def );
-            r._size = _size;
+            r.setDef( op( def() ) );
+            r._p.resize( size() );
             for( const_iterator it = begin(); it != end(); it++ ) {
                 T new_val = op( it->second );
-                if( new_val != r._def )
-                    r.set( it->first, new_val );
+                if( new_val != r.def() )
+                    r._p.push_back( it->first, new_val );
             }
             return r;
         }
+
+        /// Returns negative of \c *this
+        TProbSp<T> operator- () const { return pwUnaryTr( std::negate<T>() ); }
 
         /// Returns pointwise absolute value
         TProbSpV<T> abs() const { return pwUnaryTr( fo_abs<T>() ); }
@@ -397,6 +332,8 @@ template <typename T> class TProbSpV {
         }
 
         /// Returns normalized copy of \c *this, using the specified norm
+        /** \throw NOT_NORMALIZABLE if the norm is zero
+         */
         TProbSpV<T> normalized( NormType norm = NORMPROB ) const {
             T Z = 0;
             if( norm == NORMPROB )
@@ -415,11 +352,11 @@ template <typename T> class TProbSpV {
     //@{
         /// Applies unary operation \a op pointwise
         template<typename unaryOp> TProbSpV<T>& pwUnaryOp( unaryOp op ) {
-            _def = op( _def );
+            setDef( op( def() ) );
             for( iterator it = begin(); it != end(); ) {
                 T new_val = op( it->second );
-                if( new_val != _def ) {
-                    it->setVal( new_val );
+                if( new_val != def() ) {
+                    it->second = new_val;
                     it++;
                 } else
                     it = _p.erase( it );
@@ -429,7 +366,7 @@ template <typename T> class TProbSpV {
 
         /// Draws all entries i.i.d. from a uniform distribution on [0,1)
         TProbSpV<T>& randomize() {
-            _def = 0;
+            setDef( 0 );
             for( size_t i = 0; i < size(); i++ )
                 set( i, (T)rnd_uniform() );
             return *this;
@@ -437,8 +374,8 @@ template <typename T> class TProbSpV {
 
         /// Sets all entries to \f$1/n\f$ where \a n is the length of the vector
         TProbSpV<T>& setUniform () {
-            _def = (T)1 / _size;
-            _p.clear();
+            setDef( (T)1 / size() );
+            _p.clearNonDef();
             return *this;
         }
 
@@ -459,6 +396,8 @@ template <typename T> class TProbSpV {
         }
 
         /// Normalizes vector using the specified norm
+        /** \throw NOT_NORMALIZABLE if the norm is zero
+         */
         T normalize( NormType norm=NORMPROB ) {
             T Z = 0;
             if( norm == NORMPROB )
@@ -476,9 +415,9 @@ template <typename T> class TProbSpV {
     /// \name Operations with scalars
     //@{
         /// Sets all entries to \a x
-        TProbSpV<T> & fill(T x) {
-            _def = x;
-            _p.clear();
+        TProbSpV<T> & fill( T x ) {
+            setDef( x );
+            _p.clearNonDef();
             return *this;
         }
 
@@ -552,20 +491,14 @@ template <typename T> class TProbSpV {
         template<typename binaryOp> TProbSpV<T>& pwBinaryOp( const TProbSpV<T> &q, binaryOp op ) {
             DAI_DEBASSERT( size() == q.size() );
             TProbSpV<T> p(*this);
-            _def = op( p._def, q._def );
+            setDef( op( p.def(), q.def() ) );
             for( typename TProbSpV<T>::const_iterator it = p.begin(); it != p.end(); it++ ) {
                 T new_val = op( it->second, q[it->first] );
-                if( new_val != _def )
-                    set( it->first, new_val );
-                else
-                    erase( it->first );
+                set( it->first, new_val );
             }
             for( typename TProbSpV<T>::const_iterator it = q.begin(); it != q.end(); it++ ) {
                 T new_val = op( p[it->first], it->second );
-                if( new_val != _def )
-                    set( it->first, new_val );
-                else
-                    erase( it->first );
+                set( it->first, new_val );
             }
             return *this;
         }
@@ -613,17 +546,17 @@ template <typename T> class TProbSpV {
         template<typename binaryOp> TProbSpV<T> pwBinaryTr( const TProbSpV<T> &q, binaryOp op ) const {
             DAI_DEBASSERT( size() == q.size() );
             TProbSpV<T> result;
-            result._def = op( _def, q._def );
-            result._size = _size;
+            result.setDef( op( def(), q.def() ) );
+            result._p.resize( size() );
             for( typename TProbSpV<T>::const_iterator it = begin(); it != end(); it++ ) {
                 T new_val = op( it->second, q[it->first] );
-                if( new_val != result._def )
-                    result.set(it->first, new_val);
+                if( new_val != result.def() )
+                    result._p.push_back(it->first, new_val);
             }
             for( typename TProbSpV<T>::const_iterator it = q.begin(); it != q.end(); it++ ) {
                 T new_val = op( get(it->first), it->second );
-                if( new_val != result._def )
-                    result.set(it->first, new_val);
+                if( new_val != result.def() )
+                    result._p.push_back(it->first, new_val);
             }
             return result;
         }
@@ -666,6 +599,7 @@ template <typename T> class TProbSpV {
          */
         template<typename binOp1, typename binOp2> T innerProduct( const TProbSpV<T> &q, T init, binOp1 binaryOp1, binOp2 binaryOp2 ) const {
             DAI_DEBASSERT( size() == q.size() );
+            DAI_THROW(NOT_IMPLEMENTED);
             return std::inner_product( begin(), end(), q.begin(), init, binaryOp1, binaryOp2 );
         }
 };
@@ -685,6 +619,8 @@ template<typename T> T dist( const TProbSpV<T> &p, const TProbSpV<T> &q, typenam
             return (p - q).sumAbs() / 2;
         case TProbSpV<T>::DISTKL:
             return p.pwBinaryTr( q, fo_KL<T>() ).sum();
+        case TProbSpV<T>::DISTHEL:
+            return p.pwBinaryTr( q, fo_Hellinger<T>() ).sum() / 2;
         default:
             DAI_THROW(UNKNOWN_ENUM_VALUE);
             return INFINITY;
@@ -696,7 +632,7 @@ template<typename T> T dist( const TProbSpV<T> &p, const TProbSpV<T> &q, typenam
 /** \relates TProbSpV
  */
 template<typename T> std::ostream& operator<< (std::ostream& os, const TProbSpV<T>& p) {
-    os << "[" << p.p() << ", default=" << p.def() << "]";
+    os << p.p();
     return os;
 }
 

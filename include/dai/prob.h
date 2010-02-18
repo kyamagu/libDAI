@@ -263,7 +263,7 @@ template <typename T> class TProb {
             else
                 return pwUnaryTr( fo_log<T>() );
         }
-        
+
         /// Returns pointwise inverse
         /** If \a zero == \c true, uses <tt>1/0==0</tt>; otherwise, <tt>1/0==Inf</tt>.
          */
