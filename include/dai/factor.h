@@ -26,7 +26,8 @@
 #include <dai/index.h>
 #include <dai/util.h>
 #include <dai/factorsp.h>
-#include <dai/factorspv.h>
+#include <dai/spvector.h>
+#include <dai/spvector_map.h>
 
 
 namespace dai {
@@ -598,9 +599,9 @@ template<typename T> T MutualInfo(const TFactor<T> &f) {
 /// Represents a factor with values of type dai::Real.
 #ifdef DAI_SPARSE
 #if DAI_SPARSE==0
-    typedef TFactorSp<Real> Factor;
+    typedef TFactorSp<Real, spvector_map<Real> > Factor;
 #else
-    typedef TFactorSpV<Real> Factor;
+    typedef TFactorSp<Real, spvector<Real> > Factor;
 #endif
 #else
     typedef TFactor<Real> Factor;

@@ -10,7 +10,7 @@
 
 
 /// \file
-/// \brief Defines TProbSp<> class which represents sparse (probability) vectors (implemented using a map)
+/// \brief Defines TProbSp<> class which represents sparse (probability) vectors
 
 
 #ifndef __defined_libdai_probsp_h
@@ -26,7 +26,6 @@
 #include <typeinfo>
 #include <dai/util.h>
 #include <dai/exceptions.h>
-#include <dai/spvector_map.h>
 #include <dai/fo.h>
 
 
@@ -42,14 +41,10 @@ namespace dai {
  *
  *  \tparam T Should be a scalar that is castable from and to dai::Real and should support elementary arithmetic operations.
  */
-template <typename T>
+template <typename T, typename spvector_type>
 class TProbSp {
-    public:
-        /// Type used to represent the sparse vector
-        typedef spvector_map<T> spvector_type;
-
     private:
-        /// The sparse vector containing nondefault elements
+        /// The sparse vector containing the nondefault elements
         spvector_type _p;
 
     public:
@@ -278,7 +273,7 @@ class TProbSp {
         /// Lexicographical comparison
         /** \pre <tt>this->size() == q.size()</tt>
          */
-        bool operator<= (const TProbSp<T> & q) const {
+        bool operator<= (const TProbSp<T,spvector_type> & q) const {
             DAI_DEBASSERT( size() == q.size() );
             for( size_t i = 0; i < size(); i++ )
                 if( !(get(i) <= q.get(i)) )
@@ -290,8 +285,8 @@ class TProbSp {
     /// \name Unary transformations
     //@{
         /// Returns the result of applying operation \a op pointwise on \c *this
-        template<typename unaryOp> TProbSp<T> pwUnaryTr( unaryOp op ) const {
-            TProbSp<T> r;
+        template<typename unaryOp> TProbSp<T,spvector_type> pwUnaryTr( unaryOp op ) const {
+            TProbSp<T,spvector_type> r;
             r.setDef( op( def() ) );
             r._p.resize( size() );
             for( const_iterator it = begin(); it != end(); it++ ) {
@@ -303,18 +298,18 @@ class TProbSp {
         }
 
         /// Returns negative of \c *this
-        TProbSp<T> operator- () const { return pwUnaryTr( std::negate<T>() ); }
+        TProbSp<T,spvector_type> operator- () const { return pwUnaryTr( std::negate<T>() ); }
 
         /// Returns pointwise absolute value
-        TProbSp<T> abs() const { return pwUnaryTr( fo_abs<T>() ); }
+        TProbSp<T,spvector_type> abs() const { return pwUnaryTr( fo_abs<T>() ); }
 
         /// Returns pointwise exponent
-        TProbSp<T> exp() const { return pwUnaryTr( fo_exp<T>() ); }
+        TProbSp<T,spvector_type> exp() const { return pwUnaryTr( fo_exp<T>() ); }
 
         /// Returns pointwise logarithm
         /** If \a zero == \c true, uses <tt>log(0)==0</tt>; otherwise, <tt>log(0)==-Inf</tt>.
          */
-        TProbSp<T> log(bool zero=false) const {
+        TProbSp<T,spvector_type> log(bool zero=false) const {
             if( zero )
                 return pwUnaryTr( fo_log0<T>() );
             else
@@ -324,7 +319,7 @@ class TProbSp {
         /// Returns pointwise inverse
         /** If \a zero == \c true, uses <tt>1/0==0</tt>; otherwise, <tt>1/0==Inf</tt>.
          */
-        TProbSp<T> inverse(bool zero=true) const {
+        TProbSp<T,spvector_type> inverse(bool zero=true) const {
             if( zero )
                 return pwUnaryTr( fo_inv0<T>() );
             else
@@ -334,7 +329,7 @@ class TProbSp {
         /// Returns normalized copy of \c *this, using the specified norm
         /** \throw NOT_NORMALIZABLE if the norm is zero
          */
-        TProbSp<T> normalized( NormType norm = NORMPROB ) const {
+        TProbSp<T,spvector_type> normalized( NormType norm = NORMPROB ) const {
             T Z = 0;
             if( norm == NORMPROB )
                 Z = sum();
@@ -351,7 +346,7 @@ class TProbSp {
     /// \name Unary operations
     //@{
         /// Applies unary operation \a op pointwise
-        template<typename unaryOp> TProbSp<T>& pwUnaryOp( unaryOp op ) {
+        template<typename unaryOp> TProbSp<T,spvector_type>& pwUnaryOp( unaryOp op ) {
             setDef( op( def() ) );
             for( iterator it = begin(); it != end(); ) {
                 T new_val = op( it->second );
@@ -365,7 +360,7 @@ class TProbSp {
         }
 
         /// Draws all entries i.i.d. from a uniform distribution on [0,1)
-        TProbSp<T>& randomize() {
+        TProbSp<T,spvector_type>& randomize() {
             setDef( 0 );
             for( size_t i = 0; i < size(); i++ )
                 set( i, (T)rnd_uniform() );
@@ -373,22 +368,22 @@ class TProbSp {
         }
 
         /// Sets all entries to \f$1/n\f$ where \a n is the length of the vector
-        TProbSp<T>& setUniform () {
+        TProbSp<T,spvector_type>& setUniform () {
             setDef( (T)1 / size() );
             _p.clearNonDef();
             return *this;
         }
 
         /// Applies absolute value pointwise
-        const TProbSp<T>& takeAbs() { return pwUnaryOp( fo_abs<T>() ); }
+        const TProbSp<T,spvector_type>& takeAbs() { return pwUnaryOp( fo_abs<T>() ); }
 
         /// Applies exponent pointwise
-        const TProbSp<T>& takeExp() { return pwUnaryOp( fo_exp<T>() ); }
+        const TProbSp<T,spvector_type>& takeExp() { return pwUnaryOp( fo_exp<T>() ); }
 
         /// Applies logarithm pointwise
         /** If \a zero == \c true, uses <tt>log(0)==0</tt>; otherwise, <tt>log(0)==-Inf</tt>.
          */
-        const TProbSp<T>& takeLog(bool zero=false) {
+        const TProbSp<T,spvector_type>& takeLog(bool zero=false) {
             if( zero ) {
                 return pwUnaryOp( fo_log0<T>() );
             } else
@@ -415,14 +410,14 @@ class TProbSp {
     /// \name Operations with scalars
     //@{
         /// Sets all entries to \a x
-        TProbSp<T> & fill( T x ) {
+        TProbSp<T,spvector_type> & fill( T x ) {
             setDef( x );
             _p.clearNonDef();
             return *this;
         }
 
         /// Adds scalar \a x to each entry
-        TProbSp<T>& operator+= (T x) {
+        TProbSp<T,spvector_type>& operator+= (T x) {
             if( x != 0 )
                 return pwUnaryOp( std::bind2nd( std::plus<T>(), x ) );
             else
@@ -430,7 +425,7 @@ class TProbSp {
         }
 
         /// Subtracts scalar \a x from each entry
-        TProbSp<T>& operator-= (T x) {
+        TProbSp<T,spvector_type>& operator-= (T x) {
             if( x != 0 )
                 return pwUnaryOp( std::bind2nd( std::minus<T>(), x ) );
             else
@@ -438,7 +433,7 @@ class TProbSp {
         }
 
         /// Multiplies each entry with scalar \a x
-        TProbSp<T>& operator*= (T x) {
+        TProbSp<T,spvector_type>& operator*= (T x) {
             if( x != 1 )
                 return pwUnaryOp( std::bind2nd( std::multiplies<T>(), x ) );
             else
@@ -446,7 +441,7 @@ class TProbSp {
         }
 
         /// Divides each entry by scalar \a x
-        TProbSp<T>& operator/= (T x) {
+        TProbSp<T,spvector_type>& operator/= (T x) {
             DAI_DEBASSERT( x != 0 );
             if( x != 1 )
                 return pwUnaryOp( std::bind2nd( std::divides<T>(), x ) );
@@ -455,7 +450,7 @@ class TProbSp {
         }
 
         /// Raises entries to the power \a x
-        TProbSp<T>& operator^= (T x) {
+        TProbSp<T,spvector_type>& operator^= (T x) {
             if( x != (T)1 )
                 return pwUnaryOp( std::bind2nd( fo_pow<T>(), x) );
             else
@@ -466,19 +461,19 @@ class TProbSp {
     /// \name Transformations with scalars
     //@{
         /// Returns sum of \c *this and scalar \a x
-        TProbSp<T> operator+ (T x) const { return pwUnaryTr( std::bind2nd( std::plus<T>(), x ) ); }
+        TProbSp<T,spvector_type> operator+ (T x) const { return pwUnaryTr( std::bind2nd( std::plus<T>(), x ) ); }
 
         /// Returns difference of \c *this and scalar \a x
-        TProbSp<T> operator- (T x) const { return pwUnaryTr( std::bind2nd( std::minus<T>(), x ) ); }
+        TProbSp<T,spvector_type> operator- (T x) const { return pwUnaryTr( std::bind2nd( std::minus<T>(), x ) ); }
 
         /// Returns product of \c *this with scalar \a x
-        TProbSp<T> operator* (T x) const { return pwUnaryTr( std::bind2nd( std::multiplies<T>(), x ) ); }
+        TProbSp<T,spvector_type> operator* (T x) const { return pwUnaryTr( std::bind2nd( std::multiplies<T>(), x ) ); }
 
         /// Returns quotient of \c *this and scalar \a x, where division by 0 yields 0
-        TProbSp<T> operator/ (T x) const { return pwUnaryTr( std::bind2nd( fo_divides0<T>(), x ) ); }
+        TProbSp<T,spvector_type> operator/ (T x) const { return pwUnaryTr( std::bind2nd( fo_divides0<T>(), x ) ); }
 
         /// Returns \c *this raised to the power \a x
-        TProbSp<T> operator^ (T x) const { return pwUnaryTr( std::bind2nd( fo_pow<T>(), x ) ); }
+        TProbSp<T,spvector_type> operator^ (T x) const { return pwUnaryTr( std::bind2nd( fo_pow<T>(), x ) ); }
     //@}
 
     /// \name Operations with other equally-sized vectors
@@ -488,15 +483,15 @@ class TProbSp {
          *  \param q Right operand
          *  \param op Operation of type \a binaryOp
          */
-        template<typename binaryOp> TProbSp<T>& pwBinaryOp( const TProbSp<T> &q, binaryOp op ) {
+        template<typename binaryOp> TProbSp<T,spvector_type>& pwBinaryOp( const TProbSp<T,spvector_type> &q, binaryOp op ) {
             DAI_DEBASSERT( size() == q.size() );
-            TProbSp<T> p(*this);
+            TProbSp<T,spvector_type> p(*this);
             setDef( op( p.def(), q.def() ) );
-            for( typename TProbSp<T>::const_iterator it = p.begin(); it != p.end(); it++ ) {
+            for( typename TProbSp<T,spvector_type>::const_iterator it = p.begin(); it != p.end(); it++ ) {
                 T new_val = op( it->second, q[it->first] );
                 set( it->first, new_val );
             }
-            for( typename TProbSp<T>::const_iterator it = q.begin(); it != q.end(); it++ ) {
+            for( typename TProbSp<T,spvector_type>::const_iterator it = q.begin(); it != q.end(); it++ ) {
                 T new_val = op( p[it->first], it->second );
                 set( it->first, new_val );
             }
@@ -506,34 +501,34 @@ class TProbSp {
         /// Pointwise addition with \a q
         /** \pre <tt>this->size() == q.size()</tt>
          */
-        TProbSp<T>& operator+= (const TProbSp<T> & q) { return pwBinaryOp( q, std::plus<T>() ); }
+        TProbSp<T,spvector_type>& operator+= (const TProbSp<T,spvector_type> & q) { return pwBinaryOp( q, std::plus<T>() ); }
 
         /// Pointwise subtraction of \a q
         /** \pre <tt>this->size() == q.size()</tt>
          */
-        TProbSp<T>& operator-= (const TProbSp<T> & q) { return pwBinaryOp( q, std::minus<T>() ); }
+        TProbSp<T,spvector_type>& operator-= (const TProbSp<T,spvector_type> & q) { return pwBinaryOp( q, std::minus<T>() ); }
 
         /// Pointwise multiplication with \a q
         /** \pre <tt>this->size() == q.size()</tt>
          */
-        TProbSp<T>& operator*= (const TProbSp<T> & q) { return pwBinaryOp( q, std::multiplies<T>() ); }
+        TProbSp<T,spvector_type>& operator*= (const TProbSp<T,spvector_type> & q) { return pwBinaryOp( q, std::multiplies<T>() ); }
 
         /// Pointwise division by \a q, where division by 0 yields 0
         /** \pre <tt>this->size() == q.size()</tt>
-         *  \see divide(const TProbSp<T> &)
+         *  \see divide(const TProbSp<T,spvector_type> &)
          */
-        TProbSp<T>& operator/= (const TProbSp<T> & q) { return pwBinaryOp( q, fo_divides0<T>() ); }
+        TProbSp<T,spvector_type>& operator/= (const TProbSp<T,spvector_type> & q) { return pwBinaryOp( q, fo_divides0<T>() ); }
 
         /// Pointwise division by \a q, where division by 0 yields +Inf
         /** \pre <tt>this->size() == q.size()</tt>
-         *  \see operator/=(const TProbSp<T> &)
+         *  \see operator/=(const TProbSp<T,spvector_type> &)
          */
-        TProbSp<T>& divide (const TProbSp<T> & q) { return pwBinaryOp( q, std::divides<T>() ); }
+        TProbSp<T,spvector_type>& divide (const TProbSp<T,spvector_type> & q) { return pwBinaryOp( q, std::divides<T>() ); }
 
         /// Pointwise power
         /** \pre <tt>this->size() == q.size()</tt>
          */
-        TProbSp<T>& operator^= (const TProbSp<T> & q) { return pwBinaryOp( q, fo_pow<T>() ); }
+        TProbSp<T,spvector_type>& operator^= (const TProbSp<T,spvector_type> & q) { return pwBinaryOp( q, fo_pow<T>() ); }
     //@}
 
     /// \name Transformations with other equally-sized vectors
@@ -543,17 +538,17 @@ class TProbSp {
          *  \param q Right operand
          *  \param op Operation of type \a binaryOp
          */
-        template<typename binaryOp> TProbSp<T> pwBinaryTr( const TProbSp<T> &q, binaryOp op ) const {
+        template<typename binaryOp> TProbSp<T,spvector_type> pwBinaryTr( const TProbSp<T,spvector_type> &q, binaryOp op ) const {
             DAI_DEBASSERT( size() == q.size() );
-            TProbSp<T> result;
+            TProbSp<T,spvector_type> result;
             result.setDef( op( def(), q.def() ) );
             result._p.resize( size() );
-            for( typename TProbSp<T>::const_iterator it = begin(); it != end(); it++ ) {
+            for( typename TProbSp<T,spvector_type>::const_iterator it = begin(); it != end(); it++ ) {
                 T new_val = op( it->second, q[it->first] );
                 if( new_val != result.def() )
                     result._p.push_back(it->first, new_val);
             }
-            for( typename TProbSp<T>::const_iterator it = q.begin(); it != q.end(); it++ ) {
+            for( typename TProbSp<T,spvector_type>::const_iterator it = q.begin(); it != q.end(); it++ ) {
                 T new_val = op( get(it->first), it->second );
                 if( new_val != result.def() )
                     result._p.push_back(it->first, new_val);
@@ -564,40 +559,40 @@ class TProbSp {
         /// Returns sum of \c *this and \a q
         /** \pre <tt>this->size() == q.size()</tt>
          */
-        TProbSp<T> operator+ ( const TProbSp<T>& q ) const { return pwBinaryTr( q, std::plus<T>() ); }
+        TProbSp<T,spvector_type> operator+ ( const TProbSp<T,spvector_type>& q ) const { return pwBinaryTr( q, std::plus<T>() ); }
 
         /// Return \c *this minus \a q
         /** \pre <tt>this->size() == q.size()</tt>
          */
-        TProbSp<T> operator- ( const TProbSp<T>& q ) const { return pwBinaryTr( q, std::minus<T>() ); }
+        TProbSp<T,spvector_type> operator- ( const TProbSp<T,spvector_type>& q ) const { return pwBinaryTr( q, std::minus<T>() ); }
 
         /// Return product of \c *this with \a q
         /** \pre <tt>this->size() == q.size()</tt>
          */
-        TProbSp<T> operator* ( const TProbSp<T> &q ) const { return pwBinaryTr( q, std::multiplies<T>() ); }
+        TProbSp<T,spvector_type> operator* ( const TProbSp<T,spvector_type> &q ) const { return pwBinaryTr( q, std::multiplies<T>() ); }
 
         /// Returns quotient of \c *this with \a q, where division by 0 yields 0
         /** \pre <tt>this->size() == q.size()</tt>
-         *  \see divided_by(const TProbSp<T> &)
+         *  \see divided_by(const TProbSp<T,spvector_type> &)
          */
-        TProbSp<T> operator/ ( const TProbSp<T> &q ) const { return pwBinaryTr( q, fo_divides0<T>() ); }
+        TProbSp<T,spvector_type> operator/ ( const TProbSp<T,spvector_type> &q ) const { return pwBinaryTr( q, fo_divides0<T>() ); }
 
         /// Pointwise division by \a q, where division by 0 yields +Inf
         /** \pre <tt>this->size() == q.size()</tt>
-         *  \see operator/(const TProbSp<T> &)
+         *  \see operator/(const TProbSp<T,spvector_type> &)
          */
-        TProbSp<T> divided_by( const TProbSp<T> &q ) const { return pwBinaryTr( q, std::divides<T>() ); }
+        TProbSp<T,spvector_type> divided_by( const TProbSp<T,spvector_type> &q ) const { return pwBinaryTr( q, std::divides<T>() ); }
 
         /// Returns \c *this to the power \a q
         /** \pre <tt>this->size() == q.size()</tt>
          */
-        TProbSp<T> operator^ ( const TProbSp<T> &q ) const { return pwBinaryTr( q, fo_pow<T>() ); }
+        TProbSp<T,spvector_type> operator^ ( const TProbSp<T,spvector_type> &q ) const { return pwBinaryTr( q, fo_pow<T>() ); }
     //@}
 
         /// Performs a generalized inner product, similar to std::inner_product
         /** \pre <tt>this->size() == q.size()</tt>
          */
-        template<typename binOp1, typename binOp2> T innerProduct( const TProbSp<T> &q, T init, binOp1 binaryOp1, binOp2 binaryOp2 ) const {
+        template<typename binOp1, typename binOp2> T innerProduct( const TProbSp<T,spvector_type> &q, T init, binOp1 binaryOp1, binOp2 binaryOp2 ) const {
             DAI_DEBASSERT( size() == q.size() );
             DAI_THROW(NOT_IMPLEMENTED);
             return std::inner_product( begin(), end(), q.begin(), init, binaryOp1, binaryOp2 );
@@ -609,17 +604,17 @@ class TProbSp {
 /** \relates TProbSp
  *  \pre <tt>this->size() == q.size()</tt>
  */
-template<typename T> T dist( const TProbSp<T> &p, const TProbSp<T> &q, typename TProbSp<T>::DistType dt ) {
+template<typename T, typename spvector_type> T dist( const TProbSp<T,spvector_type> &p, const TProbSp<T,spvector_type> &q, typename TProbSp<T,spvector_type>::DistType dt ) {
     switch( dt ) {
-        case TProbSp<T>::DISTL1:
+        case TProbSp<T,spvector_type>::DISTL1:
             return (p - q).sumAbs();
-        case TProbSp<T>::DISTLINF:
+        case TProbSp<T,spvector_type>::DISTLINF:
             return (p - q).maxAbs();
-        case TProbSp<T>::DISTTV:
+        case TProbSp<T,spvector_type>::DISTTV:
             return (p - q).sumAbs() / 2;
-        case TProbSp<T>::DISTKL:
+        case TProbSp<T,spvector_type>::DISTKL:
             return p.pwBinaryTr( q, fo_KL<T>() ).sum();
-        case TProbSp<T>::DISTHEL:
+        case TProbSp<T,spvector_type>::DISTHEL:
             return p.pwBinaryTr( q, fo_Hellinger<T>() ).sum() / 2;
         default:
             DAI_THROW(UNKNOWN_ENUM_VALUE);
@@ -628,10 +623,10 @@ template<typename T> T dist( const TProbSp<T> &p, const TProbSp<T> &q, typename 
 }
 
 
-/// Writes a TProbSp<T> to an output stream
+/// Writes a TProbSp<T,spvector_type> to an output stream
 /** \relates TProbSp
  */
-template<typename T> std::ostream& operator<< (std::ostream& os, const TProbSp<T>& p) {
+template<typename T, typename spvector_type> std::ostream& operator<< (std::ostream& os, const TProbSp<T,spvector_type>& p) {
     os << p.p();
     return os;
 }
@@ -641,7 +636,7 @@ template<typename T> std::ostream& operator<< (std::ostream& os, const TProbSp<T
 /** \relates TProbSp
  *  \pre <tt>this->size() == q.size()</tt>
  */
-template<typename T> TProbSp<T> min( const TProbSp<T> &a, const TProbSp<T> &b ) {
+template<typename T, typename spvector_type> TProbSp<T,spvector_type> min( const TProbSp<T,spvector_type> &a, const TProbSp<T,spvector_type> &b ) {
     return a.pwBinaryTr( b, fo_min<T>() );
 }
 
@@ -650,7 +645,7 @@ template<typename T> TProbSp<T> min( const TProbSp<T> &a, const TProbSp<T> &b ) 
 /** \relates TProbSp
  *  \pre <tt>this->size() == q.size()</tt>
  */
-template<typename T> TProbSp<T> max( const TProbSp<T> &a, const TProbSp<T> &b ) {
+template<typename T, typename spvector_type> TProbSp<T,spvector_type> max( const TProbSp<T,spvector_type> &a, const TProbSp<T,spvector_type> &b ) {
     return a.pwBinaryTr( b, fo_max<T>() );
 }
 

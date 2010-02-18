@@ -139,7 +139,7 @@ class spvector {
             _size = n;
             if( _p.size() ) {
                 if( _p.back().first >= n ) {
-                    iterator it = lower_bound( _p.begin(), _p.end(), make_pair(n, T()), first_less<T>() );
+                    iterator it = lower_bound( _p.begin(), _p.end(), std::make_pair(n, T()), first_less<size_t, T>() );
                     _p.resize( distance( _p.begin(), it ) );
                 }
             }
@@ -152,7 +152,7 @@ class spvector {
     //@}
 
         /// Adds a new nondefault element, assuming that its index is higher than any existing index
-        void push_back( size_t idx, T val ) { _p.push_back( make_pair( idx, val ) ); }
+        void push_back( size_t idx, T val ) { _p.push_back( std::make_pair( idx, val ) ); }
 
         /// Sets default value
         void setDefault( T def ) { _def = def; }
@@ -166,7 +166,7 @@ class spvector {
         /// Sets \a i 'th entry to \a val
         void set( size_t i, T val ) {
             DAI_DEBASSERT( i < _size );
-            iterator it = lower_bound( _p.begin(), _p.end(), make_pair(i, T()), first_less<T>() );
+            iterator it = lower_bound( _p.begin(), _p.end(), std::make_pair(i, T()), first_less<size_t, T>() );
             if( (it != _p.end()) && (it->first == i) ) {
                 // nondefault value already present
                 if( val == _def )
@@ -178,14 +178,14 @@ class spvector {
                 if( val == _def )
                     ; // do nothing
                 else
-                    _p.insert( it, make_pair(i, val) );
+                    _p.insert( it, std::make_pair(i, val) );
             }
         }
 
         /// Gets \a i 'th entry
         T get( size_t i ) const {
             DAI_DEBASSERT( i < _size );
-            const_iterator it = lower_bound( _p.begin(), _p.end(), make_pair(i, T()), first_less<T>() );
+            const_iterator it = lower_bound( _p.begin(), _p.end(), std::make_pair(i, T()), first_less<size_t, T>() );
             if( (it != _p.end()) && (it->first == i) )
                 return it->second;
             else

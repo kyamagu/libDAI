@@ -27,7 +27,8 @@
 #include <dai/exceptions.h>
 #include <dai/fo.h>
 #include <dai/probsp.h>
-#include <dai/probspv.h>
+#include <dai/spvector.h>
+#include <dai/spvector_map.h>
 
 
 namespace dai {
@@ -70,10 +71,10 @@ template <typename T> class TProb {
         TProb() : _p() {}
 
         /// Construct uniform probability distribution over \a n outcomes (i.e., a vector of length \a n with each entry set to \f$1/n\f$)
-        explicit TProb( size_t n ) : _p(std::vector<T>(n, (T)1 / n)) {}
+        explicit TProb( size_t n ) : _p( n, (T)1 / n ) {}
 
         /// Construct vector of length \a n with each entry set to \a p
-        explicit TProb( size_t n, T p ) : _p(n, p) {}
+        explicit TProb( size_t n, T p ) : _p( n, p ) {}
 
         /// Construct vector from a range
         /** \tparam TIterator Iterates over instances that can be cast to \a T
@@ -347,7 +348,7 @@ template <typename T> class TProb {
     /// \name Operations with scalars
     //@{
         /// Sets all entries to \a x
-        TProb<T> & fill(T x) {
+        TProb<T> & fill( T x ) {
             std::fill( _p.begin(), _p.end(), x );
             return *this;
         }
@@ -571,9 +572,9 @@ template<typename T> TProb<T> max( const TProb<T> &a, const TProb<T> &b ) {
 /// Represents a vector with entries of type dai::Real.
 #ifdef DAI_SPARSE
 #if DAI_SPARSE==0
-    typedef TProbSp<Real> Prob;
+    typedef TProbSp<Real, spvector_map<Real> > Prob;
 #else
-    typedef TProbSpV<Real> Prob;
+    typedef TProbSp<Real, spvector<Real> > Prob;
 #endif
 #else
     typedef TProb<Real> Prob;
