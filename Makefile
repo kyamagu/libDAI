@@ -100,6 +100,10 @@ ifdef WITH_CBP
   OBJECTS:=$(OBJECTS) bbp$(OE) cbp$(OE) bp_dual$(OE)
 endif
 
+ifdef DAI_SPARSE
+  CCFLAGS:=$(CCFLAGS) -DDAI_SPARSE=$(DAI_SPARSE)
+endif
+
 # Define standard libDAI header dependencies
 HEADERS=$(INC)/bipgraph.h $(INC)/graph.h $(INC)/index.h $(INC)/var.h $(INC)/factor.h $(INC)/factorsp.h $(INC)/factorspv.h $(INC)/varset.h $(INC)/smallset.h $(INC)/fo.h $(INC)/prob.h $(INC)/probsp.h $(INC)/probspv.h $(INC)/daialg.h $(INC)/properties.h $(INC)/alldai.h $(INC)/enum.h $(INC)/exceptions.h $(INC)/util.h
 

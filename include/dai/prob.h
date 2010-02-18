@@ -569,9 +569,15 @@ template<typename T> TProb<T> max( const TProb<T> &a, const TProb<T> &b ) {
 
 
 /// Represents a vector with entries of type dai::Real.
-typedef TProbSpV<Real> Prob;
-//typedef TProbSp<Real> Prob;
-//typedef TProb<Real> Prob;
+#ifdef DAI_SPARSE
+#if DAI_SPARSE==0
+    typedef TProbSp<Real> Prob;
+#else
+    typedef TProbSpV<Real> Prob;
+#endif
+#else
+    typedef TProb<Real> Prob;
+#endif
 
 
 } // end of namespace dai

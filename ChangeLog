@@ -1,7 +1,9 @@
 git sparse
 ----------
 
-* Redefined Prob as TProbSpV<Real> and Factor as TFactorSpV<Real>
+* Introduced build flag / C++ macro DAI_SPARSE to control whether
+  libDAI should use sparse factors, and if so, which type of sparse
+  factors.
 * [Vicenç Gomez] Added classes TProbSpV<T> and TFactorSp<T> for
   sparse factors, implemented as a vector<pair<size_t,T> >
 * Added classes TProbSp<T> and TFactorSp<T> for sparse factors,

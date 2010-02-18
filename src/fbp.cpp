@@ -12,7 +12,11 @@
 #include <dai/fbp.h>
 
 
+#ifdef DAI_SPARSE
 #define DAI_FBP_FAST 0
+#else
+#define DAI_FBP_FAST 1
+#endif
 
 
 namespace dai {

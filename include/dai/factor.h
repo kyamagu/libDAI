@@ -596,9 +596,15 @@ template<typename T> T MutualInfo(const TFactor<T> &f) {
 
 
 /// Represents a factor with values of type dai::Real.
-typedef TFactorSpV<Real> Factor;
-//typedef TFactorSp<Real> Factor;
-//typedef TFactor<Real> Factor;
+#ifdef DAI_SPARSE
+#if DAI_SPARSE==0
+    typedef TFactorSp<Real> Factor;
+#else
+    typedef TFactorSpV<Real> Factor;
+#endif
+#else
+    typedef TFactor<Real> Factor;
+#endif
 
 
 /// Returns a binary single-variable factor \f$ \exp(hx) \f$ where \f$ x = \pm 1 \f$

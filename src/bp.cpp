@@ -29,7 +29,11 @@ using namespace std;
 const char *BP::Name = "BP";
 
 
+#ifdef DAI_SPARSE
 #define DAI_BP_FAST 0
+#else
+#define DAI_BP_FAST 1
+#endif
 
 
 void BP::setProperties( const PropertySet &opts ) {

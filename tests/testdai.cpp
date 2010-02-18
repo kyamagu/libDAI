@@ -257,8 +257,14 @@ int main( int argc, char *argv[] ) {
         cout << "left to right, so if a property occurs repeatedly, the right-most value is used." << endl << endl;
         cout << opts_required << opts_optional << endl;
 #ifdef DAI_DEBUG
-        cout << "Note: this is a debugging build of libDAI." << endl << endl;
+        cout << "Note: this is a debugging build of libDAI." << endl;
 #endif
+#ifdef DAI_SPARSE
+        cout << "It uses sparse factors, implemented using a " << (DAI_SPARSE ? "vector" : "map") << "." << endl;
+#else
+        cout << "It uses dense factors." << endl;
+#endif
+        cout << endl;
         cout << "Example:  ./testdai --filename testfast.fg --aliases aliases.conf --methods JTREE_HUGIN BP_SEQFIX BP_PARALL[maxiter=5]" << endl;
         return 1;
     }
