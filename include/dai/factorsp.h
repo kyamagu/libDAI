@@ -205,7 +205,7 @@ class TFactorSp {
         }
 
         /// Returns normalized copy of \c *this, using the specified norm
-        TFactorSp<T,spvector_type> normalized( typename TProbSp<T,spvector_type>::NormType norm=TProbSp<T,spvector_type>::NORMPROB ) const {
+        TFactorSp<T,spvector_type> normalized( ProbNormType norm=NORMPROB ) const {
             TFactorSp<T,spvector_type> x;
             x._vs = _vs;
             x._p = _p.normalized( norm );
@@ -222,7 +222,7 @@ class TFactorSp {
         TFactorSp<T,spvector_type>& setUniform () { _p.setUniform(); return *this; }
 
         /// Normalizes factor using the specified norm
-        T normalize( typename TProbSp<T,spvector_type>::NormType norm=TProbSp<T,spvector_type>::NORMPROB ) { return _p.normalize( norm ); }
+        T normalize( ProbNormType norm=NORMPROB ) { return _p.normalize( norm ); }
     //@}
 
     /// \name Operations with scalars
@@ -521,7 +521,7 @@ template<typename T, typename spvector_type> TFactorSp<T,spvector_type> TFactorS
     */
 
     if( normed )
-        result.normalize( TProbSp<T,spvector_type>::NORMPROB );
+        result.normalize( NORMPROB );
 
     return result;
 }
@@ -554,7 +554,7 @@ template<typename T, typename spvector_type> TFactorSp<T,spvector_type> TFactorS
     }
 */
     if( normed )
-        result.normalize( TProbSp<T,spvector_type>::NORMPROB );
+        result.normalize( NORMPROB );
 
     return result;
 }
@@ -689,7 +689,7 @@ template<typename T, typename spvector_type> std::ostream& operator<< (std::ostr
 /** \relates TFactorSp
  *  \pre f.vars() == g.vars()
  */
-template<typename T, typename spvector_type> T dist( const TFactorSp<T,spvector_type> &f, const TFactorSp<T,spvector_type> &g, typename TProbSp<T,spvector_type>::DistType dt ) {
+template<typename T, typename spvector_type> T dist( const TFactorSp<T,spvector_type> &f, const TFactorSp<T,spvector_type> &g, ProbDistType dt ) {
     if( f.vars().empty() || g.vars().empty() )
         return -1;
     else {
@@ -728,7 +728,7 @@ template<typename T, typename spvector_type> T MutualInfo(const TFactorSp<T,spve
     VarSet::const_iterator it = f.vars().begin();
     Var i = *it; it++; Var j = *it;
     TFactorSp<T,spvector_type> projection = f.marginal(i) * f.marginal(j);
-    return dist( f.normalized(), projection, TProbSp<T,spvector_type>::DISTKL );
+    return dist( f.normalized(), projection, DISTKL );
 }
 
 

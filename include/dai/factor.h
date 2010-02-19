@@ -209,7 +209,7 @@ template <typename T> class TFactor {
         /// Returns normalized copy of \c *this, using the specified norm
         /** \throw NOT_NORMALIZABLE if the norm is zero
          */
-        TFactor<T> normalized( typename TProb<T>::NormType norm=TProb<T>::NORMPROB ) const {
+        TFactor<T> normalized( ProbNormType norm=NORMPROB ) const {
             TFactor<T> x;
             x._vs = _vs;
             x._p = _p.normalized( norm );
@@ -228,7 +228,7 @@ template <typename T> class TFactor {
         /// Normalizes factor using the specified norm
         /** \throw NOT_NORMALIZABLE if the norm is zero
          */
-        T normalize( typename TProb<T>::NormType norm=TProb<T>::NORMPROB ) { return _p.normalize( norm ); }
+        T normalize( ProbNormType norm=NORMPROB ) { return _p.normalize( norm ); }
     //@}
 
     /// \name Operations with scalars
@@ -485,7 +485,7 @@ template<typename T> TFactor<T> TFactor<T>::marginal(const VarSet &vars, bool no
         res.set( i_res, res[i_res] + _p[i] );
 
     if( normed )
-        res.normalize( TProb<T>::NORMPROB );
+        res.normalize( NORMPROB );
 
     return res;
 }
@@ -502,7 +502,7 @@ template<typename T> TFactor<T> TFactor<T>::maxMarginal(const VarSet &vars, bool
             res.set( i_res, _p[i] );
 
     if( normed )
-        res.normalize( TProb<T>::NORMPROB );
+        res.normalize( NORMPROB );
 
     return res;
 }
@@ -553,7 +553,7 @@ template<typename T> std::ostream& operator<< (std::ostream& os, const TFactor<T
 /** \relates TFactor
  *  \pre f.vars() == g.vars()
  */
-template<typename T> T dist( const TFactor<T> &f, const TFactor<T> &g, typename TProb<T>::DistType dt ) {
+template<typename T> T dist( const TFactor<T> &f, const TFactor<T> &g, ProbDistType dt ) {
     if( f.vars().empty() || g.vars().empty() )
         return -1;
     else {
@@ -592,7 +592,7 @@ template<typename T> T MutualInfo(const TFactor<T> &f) {
     VarSet::const_iterator it = f.vars().begin();
     Var i = *it; it++; Var j = *it;
     TFactor<T> projection = f.marginal(i) * f.marginal(j);
-    return dist( f.normalized(), projection, TProb<T>::DISTKL );
+    return dist( f.normalized(), projection, DISTKL );
 }
 
 

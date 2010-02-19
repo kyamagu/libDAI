@@ -49,22 +49,6 @@ template <typename T> class TProb {
         std::vector<T> _p;
 
     public:
-        /// Enumerates different ways of normalizing a probability measure.
-        /**
-         *  - NORMPROB means that the sum of all entries should be 1;
-         *  - NORMLINF means that the maximum absolute value of all entries should be 1.
-         */
-        typedef enum { NORMPROB, NORMLINF } NormType;
-        /// Enumerates different distance measures between probability measures.
-        /**
-         *  - DISTL1 is the \f$\ell_1\f$ distance (sum of absolute values of pointwise difference);
-         *  - DISTLINF is the \f$\ell_\infty\f$ distance (maximum absolute value of pointwise difference);
-         *  - DISTTV is the total variation distance (half of the \f$\ell_1\f$ distance);
-         *  - DISTKL is the Kullback-Leibler distance (\f$\sum_i p_i (\log p_i - \log q_i)\f$).
-         *  - DISTHEL is the Hellinger distance (\f$\frac{1}{2}\sum_i (\sqrt{p_i}-\sqrt{q_i})^2\f$).
-         */
-        typedef enum { DISTL1, DISTLINF, DISTTV, DISTKL, DISTHEL } DistType;
-
     /// \name Constructors and destructors
     //@{
         /// Default constructor (constructs empty vector)
@@ -278,7 +262,7 @@ template <typename T> class TProb {
         /// Returns normalized copy of \c *this, using the specified norm
         /** \throw NOT_NORMALIZABLE if the norm is zero
          */
-        TProb<T> normalized( NormType norm = NORMPROB ) const {
+        TProb<T> normalized( ProbNormType norm = NORMPROB ) const {
             T Z = 0;
             if( norm == NORMPROB )
                 Z = sum();
@@ -331,7 +315,7 @@ template <typename T> class TProb {
         /// Normalizes vector using the specified norm
         /** \throw NOT_NORMALIZABLE if the norm is zero
          */
-        T normalize( NormType norm=NORMPROB ) {
+        T normalize( ProbNormType norm=NORMPROB ) {
             T Z = 0;
             if( norm == NORMPROB )
                 Z = sum();
@@ -521,17 +505,17 @@ template <typename T> class TProb {
 /** \relates TProb
  *  \pre <tt>this->size() == q.size()</tt>
  */
-template<typename T> T dist( const TProb<T> &p, const TProb<T> &q, typename TProb<T>::DistType dt ) {
+template<typename T> T dist( const TProb<T> &p, const TProb<T> &q, ProbDistType dt ) {
     switch( dt ) {
-        case TProb<T>::DISTL1:
+        case DISTL1:
             return p.innerProduct( q, (T)0, std::plus<T>(), fo_absdiff<T>() );
-        case TProb<T>::DISTLINF:
+        case DISTLINF:
             return p.innerProduct( q, (T)0, fo_max<T>(), fo_absdiff<T>() );
-        case TProb<T>::DISTTV:
+        case DISTTV:
             return p.innerProduct( q, (T)0, std::plus<T>(), fo_absdiff<T>() ) / 2;
-        case TProb<T>::DISTKL:
+        case DISTKL:
             return p.innerProduct( q, (T)0, std::plus<T>(), fo_KL<T>() );
-        case TProb<T>::DISTHEL:
+        case DISTHEL:
             return p.innerProduct( q, (T)0, std::plus<T>(), fo_Hellinger<T>() ) / 2;
         default:
             DAI_THROW(UNKNOWN_ENUM_VALUE);

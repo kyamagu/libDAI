@@ -48,22 +48,6 @@ class TProbSp {
         spvector_type _p;
 
     public:
-        /// Enumerates different ways of normalizing a probability measure.
-        /**
-         *  - NORMPROB means that the sum of all entries should be 1;
-         *  - NORMLINF means that the maximum absolute value of all entries should be 1.
-         */
-        typedef enum { NORMPROB, NORMLINF } NormType;
-        /// Enumerates different distance measures between probability measures.
-        /**
-         *  - DISTL1 is the \f$\ell_1\f$ distance (sum of absolute values of pointwise difference);
-         *  - DISTLINF is the \f$\ell_\infty\f$ distance (maximum absolute value of pointwise difference);
-         *  - DISTTV is the total variation distance (half of the \f$\ell_1\f$ distance);
-         *  - DISTKL is the Kullback-Leibler distance (\f$\sum_i p_i (\log p_i - \log q_i)\f$).
-         *  - DISTHEL is the Hellinger distance (\f$\frac{1}{2}\sum_i (\sqrt{p_i}-\sqrt{q_i})^2\f$).
-         */
-        typedef enum { DISTL1, DISTLINF, DISTTV, DISTKL, DISTHEL } DistType;
-
     /// \name Constructors and destructors
     //@{
         /// Default constructor (constructs empty vector)
@@ -329,7 +313,7 @@ class TProbSp {
         /// Returns normalized copy of \c *this, using the specified norm
         /** \throw NOT_NORMALIZABLE if the norm is zero
          */
-        TProbSp<T,spvector_type> normalized( NormType norm = NORMPROB ) const {
+        TProbSp<T,spvector_type> normalized( ProbNormType norm = NORMPROB ) const {
             T Z = 0;
             if( norm == NORMPROB )
                 Z = sum();
@@ -393,7 +377,7 @@ class TProbSp {
         /// Normalizes vector using the specified norm
         /** \throw NOT_NORMALIZABLE if the norm is zero
          */
-        T normalize( NormType norm=NORMPROB ) {
+        T normalize( ProbNormType norm=NORMPROB ) {
             T Z = 0;
             if( norm == NORMPROB )
                 Z = sum();
@@ -604,17 +588,17 @@ class TProbSp {
 /** \relates TProbSp
  *  \pre <tt>this->size() == q.size()</tt>
  */
-template<typename T, typename spvector_type> T dist( const TProbSp<T,spvector_type> &p, const TProbSp<T,spvector_type> &q, typename TProbSp<T,spvector_type>::DistType dt ) {
+template<typename T, typename spvector_type> T dist( const TProbSp<T,spvector_type> &p, const TProbSp<T,spvector_type> &q, ProbDistType dt ) {
     switch( dt ) {
-        case TProbSp<T,spvector_type>::DISTL1:
+        case DISTL1:
             return (p - q).sumAbs();
-        case TProbSp<T,spvector_type>::DISTLINF:
+        case DISTLINF:
             return (p - q).maxAbs();
-        case TProbSp<T,spvector_type>::DISTTV:
+        case DISTTV:
             return (p - q).sumAbs() / 2;
-        case TProbSp<T,spvector_type>::DISTKL:
+        case DISTKL:
             return p.pwBinaryTr( q, fo_KL<T>() ).sum();
-        case TProbSp<T,spvector_type>::DISTHEL:
+        case DISTHEL:
             return p.pwBinaryTr( q, fo_Hellinger<T>() ).sum() / 2;
         default:
             DAI_THROW(UNKNOWN_ENUM_VALUE);

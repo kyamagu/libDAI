@@ -1,6 +1,16 @@
 git sparse
 ----------
 
+* Moved Prob::NormType outside of the Prob class (into include/dai/util.h):
+    Prob::NormType -> NormType
+    TProbSp<T,spvector_type> -> NormType
+* Moved Prob::DistType outside of the Prob class (into include/dai/util.h):
+    Prob::DistType -> DistType
+    TProbSp<T,spvector_type> -> DistType
+* Merged TProbSp and TPropSpV into a templated TProbSp
+* Merged TFactorSp and TFactorSpV into a templated TFactorSp
+* Moved generic code from TProbSp into spvector_map (in include/dai/spvector_map.h)
+* Moved generic code from TProbSpV into spvector (in include/dai/spvector.h)
 * Introduced build flag / C++ macro DAI_SPARSE to control whether
   libDAI should use sparse factors, and if so, which type of sparse
   factors.
