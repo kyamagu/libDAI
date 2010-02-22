@@ -535,7 +535,7 @@ class TProbSp {
             for( typename TProbSp<T,spvector_type>::const_iterator it = q.begin(); it != q.end(); it++ ) {
                 T new_val = op( get(it->first), it->second );
                 if( new_val != result.def() )
-                    result._p.push_back(it->first, new_val);
+                    result.set( it->first, new_val );
             }
             return result;
         }
