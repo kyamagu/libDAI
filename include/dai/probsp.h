@@ -126,7 +126,7 @@ class TProbSp {
         spvector_type & p() { return _p; }
 
         /// Returns a copy of the \a i 'th entry
-        T operator[]( size_t i ) const { return _p[i]; }
+        T operator[]( size_t i ) const { return get(i); }
 
         /// Returns length of the vector (i.e., the number of entries)
         size_t size() const { return _p.size(); }

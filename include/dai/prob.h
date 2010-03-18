@@ -116,7 +116,13 @@ template <typename T> class TProb {
     //@}
 
         /// Gets \a i 'th entry
-        T get( size_t i ) const { return this->operator[](i); }
+        T get( size_t i ) const { 
+#ifdef DAI_DEBUG
+            return _p.at(i);
+#else
+            return _p[i];
+#endif
+        }
 
         /// Sets \a i 'th entry to \a val
         void set( size_t i, T val ) {
@@ -133,13 +139,7 @@ template <typename T> class TProb {
         std::vector<T> & p() { return _p; }
 
         /// Returns a copy of the \a i 'th entry
-        T operator[]( size_t i ) const {
-#ifdef DAI_DEBUG
-            return _p.at(i);
-#else
-            return _p[i];
-#endif
-        }
+        T operator[]( size_t i ) const { return get(i); }
 
         /// Returns length of the vector (i.e., the number of entries)
         size_t size() const { return _p.size(); }
@@ -204,7 +204,7 @@ template <typename T> class TProb {
             Real x = rnd_uniform() * sum();
             T s = 0;
             for( size_t i = 0; i < size(); i++ ) {
-                s += _p[i];
+                s += get(i);
                 if( s > x )
                     return i;
             }
