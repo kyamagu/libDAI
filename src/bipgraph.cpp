@@ -52,13 +52,13 @@ void BipartiteGraph::eraseNode1( size_t n1 ) {
                 nb2(n2).erase( nb2(n2).begin() + iter );
             } else if( m1.node > n1 ) {
                 // update this entry and the corresponding dual of the neighboring node of type 1
-                m1.iter = iter;
                 m1.node--;
                 nb1( m1.node, m1.dual ).dual = iter;
-                iter++;
+                m1.iter = iter++;
             } else {
-                // skip
-                iter++;
+                // update this entry and the corresponding dual of the neighboring node of type 1
+                nb1( m1.node, m1.dual ).dual = iter;
+                m1.iter = iter++;
             }
         }
     }
@@ -78,13 +78,13 @@ void BipartiteGraph::eraseNode2( size_t n2 ) {
                 nb1(n1).erase( nb1(n1).begin() + iter );
             } else if( m2.node > n2 ) {
                 // update this entry and the corresponding dual of the neighboring node of type 2
-                m2.iter = iter;
                 m2.node--;
                 nb2( m2.node, m2.dual ).dual = iter;
-                iter++;
+                m2.iter = iter++;
             } else {
-                // skip
-                iter++;
+                // update this entry and the corresponding dual of the neighboring node of type 2
+                nb2( m2.node, m2.dual ).dual = iter;
+                m2.iter = iter++;
             }
         }
     }
@@ -124,30 +124,24 @@ void BipartiteGraph::eraseEdge( size_t n1, size_t n2 ) {
 }
 
 
-std::vector<size_t> BipartiteGraph::delta1( size_t n1, bool include ) const {
+SmallSet<size_t> BipartiteGraph::delta1( size_t n1, bool include ) const {
     // get all second-order neighbors
-    std::vector<size_t> result;
+    SmallSet<size_t> result;
     foreach( const Neighbor &n2, nb1(n1) )
         foreach( const Neighbor &m1, nb2(n2) )
             if( include || (m1 != n1) )
-                result.push_back( m1 );
-    // remove duplicates
-    std::vector<size_t>::iterator it = std::unique( result.begin(), result.end() );
-    result.erase( it, result.end() );
+                result |= m1;
     return result;
 }
 
 
-std::vector<size_t> BipartiteGraph::delta2( size_t n2, bool include ) const {
+SmallSet<size_t> BipartiteGraph::delta2( size_t n2, bool include ) const {
     // store all second-order neighbors
-    std::vector<size_t> result;
+    SmallSet<size_t> result;
     foreach( const Neighbor &n1, nb2(n2) )
         foreach( const Neighbor &m2, nb1(n1) )
             if( include || (m2 != n2) )
-                result.push_back( m2 );
-    // remove duplicates
-    std::vector<size_t>::iterator it = std::unique( result.begin(), result.end() );
-    result.erase( it, result.end() );
+                result |= m2;
     return result;
 }
 
@@ -226,15 +220,16 @@ bool BipartiteGraph::isConnected() const {
 
 
 bool BipartiteGraph::isTree() const {
-    using namespace std;
     vector<levelType> levels;
 
     bool foundCycle = false;
     size_t nr_1 = 0;
     size_t nr_2 = 0;
 
-    if( nrNodes1() == 0 || nrNodes2() == 0 )
-        return true;
+    if( nrNodes1() == 0 )
+        return (nrNodes2() < 2 );
+    else if( nrNodes2() == 0 )
+        return (nrNodes1() < 2 );
     else {
         levelType newLevel;
         do {
@@ -294,7 +289,6 @@ bool BipartiteGraph::isTree() const {
 
 
 void BipartiteGraph::printDot( std::ostream& os ) const {
-    using namespace std;
     os << "graph G {" << endl;
     os << "node[shape=circle,width=0.4,fixedsize=true];" << endl;
     for( size_t n1 = 0; n1 < nrNodes1(); n1++ )

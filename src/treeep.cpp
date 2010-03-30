@@ -41,10 +41,10 @@ void TreeEP::setProperties( const PropertySet &opts ) {
 
 PropertySet TreeEP::getProperties() const {
     PropertySet opts;
-    opts.Set( "tol", props.tol );
-    opts.Set( "maxiter", props.maxiter );
-    opts.Set( "verbose", props.verbose );
-    opts.Set( "type", props.type );
+    opts.set( "tol", props.tol );
+    opts.set( "maxiter", props.maxiter );
+    opts.set( "verbose", props.verbose );
+    opts.set( "type", props.type );
     return opts;
 }
 
@@ -67,7 +67,7 @@ TreeEP::TreeEP( const FactorGraph &fg, const PropertySet &opts ) : JTree(fg, opt
        DAI_THROW(FACTORGRAPH_NOT_CONNECTED);
 
     if( opts.hasKey("tree") ) {
-        construct( opts.GetAs<RootedTree>("tree") );
+        construct( opts.getAs<RootedTree>("tree") );
     } else {
         if( props.type == Properties::TypeType::ORG || props.type == Properties::TypeType::ALT ) {
             // ORG: construct weighted graph with as weights a crude estimate of the
@@ -109,7 +109,7 @@ TreeEP::TreeEP( const FactorGraph &fg, const PropertySet &opts ) : JTree(fg, opt
             }
 
             // find maximal spanning tree
-            construct( MaxSpanningTreePrims( wg ) );
+            construct( MaxSpanningTree( wg, true ) );
         } else
             DAI_THROW(UNKNOWN_ENUM_VALUE);
     }
@@ -119,7 +119,7 @@ TreeEP::TreeEP( const FactorGraph &fg, const PropertySet &opts ) : JTree(fg, opt
 void TreeEP::construct( const RootedTree &tree ) {
     vector<VarSet> cl;
     for( size_t i = 0; i < tree.size(); i++ )
-        cl.push_back( VarSet( var(tree[i].n1), var(tree[i].n2) ) );
+        cl.push_back( VarSet( var(tree[i].first), var(tree[i].second) ) );
 
     // If no outer region can be found subsuming that factor, label the
     // factor as off-tree.
@@ -140,7 +140,7 @@ void TreeEP::construct( const RootedTree &tree ) {
                 // find efficient subtree
                 RootedTree subTree;
                 size_t subTreeSize = findEfficientTree( factor(I).vars(), subTree, PreviousRoot );
-                PreviousRoot = subTree[0].n1;
+                PreviousRoot = subTree[0].first;
                 subTree.resize( subTreeSize );
                 if( props.verbose >= 1 )
                     cerr << "Subtree " << I << " has size " << subTreeSize << endl;
@@ -252,11 +252,11 @@ TreeEP::TreeEPSubTree::TreeEPSubTree( const RootedTree &subRTree, const RootedTr
     _Qb.reserve( subRTree.size() );
     _RTree.reserve( subRTree.size() );
     for( size_t i = 0; i < subRTree.size(); i++ ) {
-        size_t alpha1 = subRTree[i].n1;     // old index 1
-        size_t alpha2 = subRTree[i].n2;     // old index 2
+        size_t alpha1 = subRTree[i].first;  // old index 1
+        size_t alpha2 = subRTree[i].second; // old index 2
         size_t beta;                        // old sep index
         for( beta = 0; beta < jt_RTree.size(); beta++ )
-            if( UEdge( jt_RTree[beta].n1, jt_RTree[beta].n2 ) == UEdge( alpha1, alpha2 ) )
+            if( UEdge( jt_RTree[beta].first, jt_RTree[beta].second ) == UEdge( alpha1, alpha2 ) )
                 break;
         DAI_ASSERT( beta != jt_RTree.size() );
 
@@ -319,17 +319,17 @@ void TreeEP::TreeEPSubTree::HUGIN_with_I( std::vector<Factor> &Qa, std::vector<F
         for( size_t i = _RTree.size(); (i--) != 0; ) {
             // clamp variables in nsrem
             for( VarSet::const_iterator n = _nsrem.begin(); n != _nsrem.end(); n++ )
-                if( _Qa[_RTree[i].n2].vars() >> *n )
-                    _Qa[_RTree[i].n2] *= createFactorDelta( *n, s(*n) );
-            Factor new_Qb = _Qa[_RTree[i].n2].marginal( _Qb[i].vars(), false );
-            _Qa[_RTree[i].n1] *= new_Qb / _Qb[i];
+                if( _Qa[_RTree[i].second].vars() >> *n )
+                    _Qa[_RTree[i].second] *= createFactorDelta( *n, s(*n) );
+            Factor new_Qb = _Qa[_RTree[i].second].marginal( _Qb[i].vars(), false );
+            _Qa[_RTree[i].first] *= new_Qb / _Qb[i];
             _Qb[i] = new_Qb;
         }
 
         // DistributeEvidence
         for( size_t i = 0; i < _RTree.size(); i++ ) {
-            Factor new_Qb = _Qa[_RTree[i].n1].marginal( _Qb[i].vars(), false );
-            _Qa[_RTree[i].n2] *= new_Qb / _Qb[i];
+            Factor new_Qb = _Qa[_RTree[i].first].marginal( _Qb[i].vars(), false );
+            _Qa[_RTree[i].second] *= new_Qb / _Qb[i];
             _Qb[i] = new_Qb;
         }
 

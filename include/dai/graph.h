@@ -4,7 +4,7 @@
  *  2, or (at your option) any later version. libDAI is distributed without any
  *  warranty. See the file COPYING for more details.
  *
- *  Copyright (C) 2006-2009  Joris Mooij  [joris dot mooij at libdai dot org]
+ *  Copyright (C) 2006-2010  Joris Mooij  [joris dot mooij at libdai dot org]
  *  Copyright (C) 2006-2007  Radboud University Nijmegen, The Netherlands
  */
 
@@ -119,9 +119,6 @@ class GraphAL {
         /// Contains for each node a vector of its neighbors
         std::vector<Neighbors> _nb;
 
-        /// Used internally by isTree()
-        typedef std::vector<size_t> levelType;
-
     public:
     /// \name Constructors and destructors
     //@{
@@ -232,7 +229,35 @@ class GraphAL {
             size_t sum = 0;
             for( size_t i = 0; i < nrNodes(); i++ )
                 sum += nb(i).size();
-            return sum;
+            return sum / 2;
+        }
+
+        /// Returns true if the graph contains an edge between nodes \a n1 and \a n2
+        /** \note The time complexity is linear in the number of neighbors of \a n1 or \a n2
+         */
+        bool hasEdge( size_t n1, size_t n2 ) {
+            if( nb(n1).size() < nb(n2).size() ) {
+                for( size_t _n2 = 0; _n2 < nb(n1).size(); _n2++ )
+                    if( nb( n1, _n2 ) == n2 )
+                        return true;
+            } else {
+                for( size_t _n1 = 0; _n1 < nb(n2).size(); _n1++ )
+                    if( nb( n2, _n1 ) == n1 )
+                        return true;
+            }
+            return false;
+        }
+
+        /// Returns the index of a given node \a n2 amongst the neighbors of \a n1
+        /** \note The time complexity is linear in the number of neighbors of \a n1
+         *  \throw OBJECT_NOT_FOUND if \a n2 is not a neighbor of \a n1
+         */
+        size_t findNb( size_t n1, size_t n2 ) {
+            for( size_t _n2 = 0; _n2 < nb(n1).size(); _n2++ )
+                if( nb( n1, _n2 ) == n2 )
+                    return _n2;
+            DAI_THROW(OBJECT_NOT_FOUND);
+            return nb(n1).size();
         }
 
         /// Returns true if the graph is connected
@@ -241,13 +266,13 @@ class GraphAL {
         /// Returns true if the graph is a tree, i.e., if it is singly connected and connected.
         bool isTree() const;
 
-        /// Checks internal consistency
+        /// Asserts internal consistency
         void checkConsistency() const;
     //@}
 
     /// \name Input and output
     //@{
-        /// Writes this GraphAL to an output stream in GraphALViz .dot syntax
+        /// Writes this GraphAL to an output stream in GraphViz .dot syntax
         void printDot( std::ostream& os ) const;
     //@}
 };
@@ -270,15 +295,21 @@ void GraphAL::construct( size_t nr, EdgeInputIterator begin, EdgeInputIterator e
 
 /// Creates a fully-connected graph with \a N nodes
 GraphAL createGraphFull( size_t N );
-/// Creates a two-dimensional rectangular grid of \a n1 by \a n2 nodes, which can be \a periodic
-GraphAL createGraphGrid( size_t n1, size_t n2, bool periodic );
-/// Creates a three-dimensional rectangular grid of \a n1 by \a n2 by \a n3 nodes, which can be \a periodic
-GraphAL createGraphGrid3D( size_t n1, size_t n2, size_t n3, bool periodic );
+/// Creates a two-dimensional rectangular grid of \a N1 by \a N2 nodes, which can be \a periodic
+GraphAL createGraphGrid( size_t N1, size_t N2, bool periodic );
+/// Creates a three-dimensional rectangular grid of \a N1 by \a N2 by \a N3 nodes, which can be \a periodic
+GraphAL createGraphGrid3D( size_t N1, size_t N2, size_t N3, bool periodic );
 /// Creates a graph consisting of a single loop of \a N nodes
 GraphAL createGraphLoop( size_t N );
 /// Creates a random tree-structured graph of \a N nodes
 GraphAL createGraphTree( size_t N );
 /// Creates a random regular graph of \a N nodes with uniform connectivity \a d
+/** Algorithm 1 in [\ref StW99].
+ *  Draws a random graph of size \a N and uniform degree \a d
+ *  from an almost uniform probability distribution over these graphs
+ *  (which becomes uniform in the limit that \a d is small and \a N goes
+ *  to infinity).
+ */
 GraphAL createGraphRegular( size_t N, size_t d );
 
 

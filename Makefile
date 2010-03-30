@@ -34,7 +34,7 @@ else
 endif
 
 # Define build targets
-TARGETS=tests utils lib examples testregression testem
+TARGETS=tests utils lib examples unittests testregression testem
 ifdef WITH_DOC
   TARGETS:=$(TARGETS) doc
 endif
@@ -126,7 +126,21 @@ examples : examples/example$(EE) examples/example_bipgraph$(EE) examples/example
 
 matlabs : matlab/dai$(ME) matlab/dai_readfg$(ME) matlab/dai_writefg$(ME) matlab/dai_potstrength$(ME)
 
-tests : tests/testdai$(EE) tests/testem/testem$(EE) tests/testbbp$(EE)
+unittests : tests/unit/var$(EE) tests/unit/smallset$(EE) tests/unit/varset$(EE) tests/unit/graph$(EE) tests/unit/bipgraph$(EE) tests/unit/weightedgraph$(EE) tests/unit/enum$(EE) tests/unit/enum$(EE) tests/unit/util$(EE) tests/unit/properties$(EE) tests/unit/index$(EE) tests/unit/prob$(EE)
+	echo Running unit tests...
+	tests/unit/var$(EE)
+	tests/unit/smallset$(EE)
+	tests/unit/varset$(EE)
+	tests/unit/graph$(EE)
+	tests/unit/bipgraph$(EE)
+	tests/unit/weightedgraph$(EE)
+	tests/unit/enum$(EE)
+	tests/unit/util$(EE)
+	tests/unit/properties$(EE)
+	tests/unit/index$(EE)
+	tests/unit/prob$(EE)
+
+tests : tests/testdai$(EE) tests/testem/testem$(EE) tests/testbbp$(EE) $(unittests)
 
 utils : utils/createfg$(EE) utils/fg2dot$(EE) utils/fginfo$(EE)
 
@@ -136,161 +150,122 @@ lib: $(LIB)/libdai$(LE)
 # OBJECTS
 ##########
 
-bipgraph$(OE) : $(SRC)/bipgraph.cpp $(HEADERS)
-	$(CC) -c $(SRC)/bipgraph.cpp
-
-graph$(OE) : $(SRC)/graph.cpp $(HEADERS)
-	$(CC) -c $(SRC)/graph.cpp
-
-varset$(OE) : $(SRC/varset.cpp $(HEADERS)
-	$(CC) -c $(SRC)/varset.cpp
-
-daialg$(OE) : $(SRC)/daialg.cpp $(HEADERS)
-	$(CC) -c $(SRC)/daialg.cpp
-
-exactinf$(OE) : $(SRC)/exactinf.cpp $(INC)/exactinf.h $(HEADERS)
-	$(CC) -c $(SRC)/exactinf.cpp
-
-bp$(OE) : $(SRC)/bp.cpp $(INC)/bp.h $(HEADERS)
-	$(CC) -c $(SRC)/bp.cpp
-
-fbp$(OE) : $(SRC)/fbp.cpp $(INC)/fbp.h $(HEADERS)
-	$(CC) -c $(SRC)/fbp.cpp
-
-trwbp$(OE) : $(SRC)/trwbp.cpp $(INC)/trwbp.h $(HEADERS)
-	$(CC) -c $(SRC)/trwbp.cpp
-
-bp_dual$(OE) : $(SRC)/bp_dual.cpp $(INC)/bp_dual.h $(HEADERS)
-	$(CC) -c $(SRC)/bp_dual.cpp
+%$(OE) : $(SRC)/%.cpp $(INC)/%.h $(HEADERS)
+	$(CC) -c $< -o $@
 
 bbp$(OE) : $(SRC)/bbp.cpp $(INC)/bbp.h $(INC)/bp_dual.h $(HEADERS)
-	$(CC) -c $(SRC)/bbp.cpp
+	$(CC) -c $<
 
 cbp$(OE) : $(SRC)/cbp.cpp $(INC)/cbp.h $(INC)/bbp.h $(INC)/bp_dual.h $(HEADERS)
-	$(CC) -c $(SRC)/cbp.cpp
-
-lc$(OE) : $(SRC)/lc.cpp $(INC)/lc.h $(HEADERS)
-	$(CC) -c $(SRC)/lc.cpp
-
-mf$(OE) : $(SRC)/mf.cpp $(INC)/mf.h $(HEADERS)
-	$(CC) -c $(SRC)/mf.cpp
-
-factor$(OE) : $(SRC)/factor.cpp $(INC)/factor.h $(HEADERS)
-	$(CC) -c $(SRC)/factor.cpp
-
-factorgraph$(OE) : $(SRC)/factorgraph.cpp $(INC)/factorgraph.h $(HEADERS)
-	$(CC) -c $(SRC)/factorgraph.cpp
-
-util$(OE) : $(SRC)/util.cpp $(INC)/util.h $(HEADERS)
-	$(CC) -c $(SRC)/util.cpp
-
-regiongraph$(OE) : $(SRC)/regiongraph.cpp $(INC)/regiongraph.h $(HEADERS)
-	$(CC) -c $(SRC)/regiongraph.cpp
+	$(CC) -c $<
 
 hak$(OE) : $(SRC)/hak.cpp $(INC)/hak.h $(HEADERS) $(INC)/regiongraph.h
-	$(CC) -c $(SRC)/hak.cpp
-
-clustergraph$(OE) : $(SRC)/clustergraph.cpp $(INC)/clustergraph.h $(HEADERS)
-	$(CC) -c $(SRC)/clustergraph.cpp
+	$(CC) -c $<
 
 jtree$(OE) : $(SRC)/jtree.cpp $(INC)/jtree.h $(HEADERS) $(INC)/weightedgraph.h $(INC)/clustergraph.h $(INC)/regiongraph.h
-	$(CC) -c $(SRC)/jtree.cpp
+	$(CC) -c $<
 
 treeep$(OE) : $(SRC)/treeep.cpp $(INC)/treeep.h $(HEADERS) $(INC)/weightedgraph.h $(INC)/clustergraph.h $(INC)/regiongraph.h $(INC)/jtree.h
-	$(CC) -c $(SRC)/treeep.cpp
-
-weightedgraph$(OE) : $(SRC)/weightedgraph.cpp $(INC)/weightedgraph.h $(HEADERS)
-	$(CC) -c $(SRC)/weightedgraph.cpp
-
-mr$(OE) : $(SRC)/mr.cpp $(INC)/mr.h $(HEADERS)
-	$(CC) -c $(SRC)/mr.cpp
-
-gibbs$(OE) : $(SRC)/gibbs.cpp $(INC)/gibbs.h $(HEADERS)
-	$(CC) -c $(SRC)/gibbs.cpp
-
-evidence$(OE) : $(SRC)/evidence.cpp $(INC)/evidence.h $(HEADERS)
-	$(CC) -c $(SRC)/evidence.cpp
+	$(CC) -c $<
 
 emalg$(OE) : $(SRC)/emalg.cpp $(INC)/emalg.h $(INC)/evidence.h $(HEADERS)
-	$(CC) -c $(SRC)/emalg.cpp
-
-properties$(OE) : $(SRC)/properties.cpp $(HEADERS)
-	$(CC) -c $(SRC)/properties.cpp
-
-exceptions$(OE) : $(SRC)/exceptions.cpp $(HEADERS)
-	$(CC) -c $(SRC)/exceptions.cpp
-
-alldai$(OE) : $(SRC)/alldai.cpp $(HEADERS)
-	$(CC) -c $(SRC)/alldai.cpp
+	$(CC) -c $<
 
 
 # EXAMPLES
 ###########
 
 examples/example$(EE) : examples/example.cpp $(HEADERS) $(LIB)/libdai$(LE)
-	$(CC) $(CCO)examples/example$(EE) examples/example.cpp $(LIBS)
+	$(CC) $(CCO)$@ $< $(LIBS)
 
 examples/example_bipgraph$(EE) : examples/example_bipgraph.cpp $(HEADERS) $(LIB)/libdai$(LE)
-	$(CC) $(CCO)examples/example_bipgraph$(EE) examples/example_bipgraph.cpp $(LIBS)
+	$(CC) $(CCO)$@ $< $(LIBS)
 
 examples/example_varset$(EE) : examples/example_varset.cpp $(HEADERS) $(LIB)/libdai$(LE)
-	$(CC) $(CCO)examples/example_varset$(EE) examples/example_varset.cpp $(LIBS)
+	$(CC) $(CCO)$@ $< $(LIBS)
 
 examples/example_permute$(EE) : examples/example_permute.cpp $(HEADERS) $(LIB)/libdai$(LE)
-	$(CC) $(CCO)examples/example_permute$(EE) examples/example_permute.cpp $(LIBS)
+	$(CC) $(CCO)$@ $< $(LIBS)
 
 examples/example_sprinkler$(EE) : examples/example_sprinkler.cpp $(HEADERS) $(LIB)/libdai$(LE)
-	$(CC) $(CCO)examples/example_sprinkler$(EE) examples/example_sprinkler.cpp $(LIBS)
+	$(CC) $(CCO)$@ $< $(LIBS)
 
 examples/example_sprinkler_gibbs$(EE) : examples/example_sprinkler_gibbs.cpp $(HEADERS) $(LIB)/libdai$(LE)
-	$(CC) $(CCO)examples/example_sprinkler_gibbs$(EE) examples/example_sprinkler_gibbs.cpp $(LIBS)
+	$(CC) $(CCO)$@ $< $(LIBS)
 
 examples/example_sprinkler_em$(EE) : examples/example_sprinkler_em.cpp $(HEADERS) $(LIB)/libdai$(LE)
-	$(CC) $(CCO)examples/example_sprinkler_em$(EE) examples/example_sprinkler_em.cpp $(LIBS)
+	$(CC) $(CCO)$@ $< $(LIBS)
+
+
+# UNIT TESTS
+#############
+
+tests/unit/var$(EE) : tests/unit/var.cpp $(HEADERS) $(LIB)/libdai$(LE)
+	$(CC) $(CCO)$@ $< $(LIBS) $(BOOSTLIBS_UTF)
+tests/unit/smallset$(EE) : tests/unit/smallset.cpp $(HEADERS) $(LIB)/libdai$(LE)
+	$(CC) $(CCO)$@ $< $(LIBS) $(BOOSTLIBS_UTF)
+tests/unit/varset$(EE) : tests/unit/varset.cpp $(HEADERS) $(LIB)/libdai$(LE)
+	$(CC) $(CCO)$@ $< $(LIBS) $(BOOSTLIBS_UTF)
+tests/unit/graph$(EE) : tests/unit/graph.cpp $(HEADERS) $(LIB)/libdai$(LE)
+	$(CC) $(CCO)$@ $< $(LIBS) $(BOOSTLIBS_UTF)
+tests/unit/bipgraph$(EE) : tests/unit/bipgraph.cpp $(HEADERS) $(LIB)/libdai$(LE)
+	$(CC) $(CCO)$@ $< $(LIBS) $(BOOSTLIBS_UTF)
+tests/unit/weightedgraph$(EE) : tests/unit/weightedgraph.cpp $(HEADERS) $(LIB)/libdai$(LE)
+	$(CC) $(CCO)$@ $< $(LIBS) $(BOOSTLIBS_UTF)
+tests/unit/enum$(EE) : tests/unit/enum.cpp $(HEADERS) $(LIB)/libdai$(LE)
+	$(CC) $(CCO)$@ $< $(LIBS) $(BOOSTLIBS_UTF)
+tests/unit/util$(EE) : tests/unit/util.cpp $(HEADERS) $(LIB)/libdai$(LE)
+	$(CC) $(CCO)$@ $< $(LIBS) $(BOOSTLIBS_UTF)
+tests/unit/properties$(EE) : tests/unit/properties.cpp $(HEADERS) $(LIB)/libdai$(LE)
+	$(CC) $(CCO)$@ $< $(LIBS) $(BOOSTLIBS_UTF)
+tests/unit/index$(EE) : tests/unit/index.cpp $(HEADERS) $(LIB)/libdai$(LE)
+	$(CC) $(CCO)$@ $< $(LIBS) $(BOOSTLIBS_UTF)
+tests/unit/prob$(EE) : tests/unit/prob.cpp $(HEADERS) $(LIB)/libdai$(LE)
+	$(CC) $(CCO)$@ $< $(LIBS) $(BOOSTLIBS_UTF)
 
 
 # TESTS
 ########
 
 tests/testdai$(EE) : tests/testdai.cpp $(HEADERS) $(LIB)/libdai$(LE)
-	$(CC) $(CCO)tests/testdai$(EE) tests/testdai.cpp $(LIBS) $(BOOSTLIBS)
+	$(CC) $(CCO)$@ $< $(LIBS) $(BOOSTLIBS_PO)
 tests/testem/testem$(EE) : tests/testem/testem.cpp $(HEADERS) $(LIB)/libdai$(LE)
-	$(CC) $(CCO)$@ $< $(LIBS) $(BOOSTLIBS)
+	$(CC) $(CCO)$@ $< $(LIBS) $(BOOSTLIBS_PO)
 
 tests/testbbp$(EE) : tests/testbbp.cpp $(HEADERS) $(LIB)/libdai$(LE)
-	$(CC) $(CCO)tests/testbbp$(EE) tests/testbbp.cpp $(LIBS)
+	$(CC) $(CCO)$@ $< $(LIBS)
 
 
 # MATLAB INTERFACE
 ###################
 
 matlab/dai$(ME) : $(SRC)/matlab/dai.cpp $(HEADERS) matlab$(OE) $(LIB)/libdai$(LE)
-	$(MEX) -o matlab/dai $(SRC)/matlab/dai.cpp matlab$(OE) $(LIB)/libdai$(LE)
+	$(MEX) -o$@ $< matlab$(OE) $(LIB)/libdai$(LE)
 
 matlab/dai_readfg$(ME) : $(SRC)/matlab/dai_readfg.cpp $(HEADERS) factorgraph$(OE) matlab$(OE) exceptions$(OE) bipgraph$(OE)
-	$(MEX) -o matlab/dai_readfg $(SRC)/matlab/dai_readfg.cpp factorgraph$(OE) matlab$(OE) exceptions$(OE) bipgraph$(OE)
+	$(MEX) -o$@ $< factorgraph$(OE) matlab$(OE) exceptions$(OE) bipgraph$(OE)
 
 matlab/dai_writefg$(ME) : $(SRC)/matlab/dai_writefg.cpp $(HEADERS) factorgraph$(OE) matlab$(OE) exceptions$(OE) bipgraph$(OE)
-	$(MEX) -o matlab/dai_writefg $(SRC)/matlab/dai_writefg.cpp factorgraph$(OE) matlab$(OE) exceptions$(OE) bipgraph$(OE)
+	$(MEX) -o$@ $< factorgraph$(OE) matlab$(OE) exceptions$(OE) bipgraph$(OE)
 
 matlab/dai_potstrength$(ME) : $(SRC)/matlab/dai_potstrength.cpp $(HEADERS) matlab$(OE) exceptions$(OE)
-	$(MEX) -o matlab/dai_potstrength $(SRC)/matlab/dai_potstrength.cpp matlab$(OE) exceptions$(OE)
+	$(MEX) -o$@ $< matlab$(OE) exceptions$(OE)
 
 matlab$(OE) : $(SRC)/matlab/matlab.cpp $(INC)/matlab/matlab.h $(HEADERS)
-	$(MEX) -c $(SRC)/matlab/matlab.cpp
+	$(MEX) -c $<
 
 
 # UTILS
 ########
 
 utils/createfg$(EE) : utils/createfg.cpp $(HEADERS) $(LIB)/libdai$(LE)
-	$(CC) $(CCO)utils/createfg$(EE) utils/createfg.cpp $(LIBS) $(BOOSTLIBS)
+	$(CC) $(CCO)$@ $< $(LIBS) $(BOOSTLIBS_PO)
 
 utils/fg2dot$(EE) : utils/fg2dot.cpp $(HEADERS) $(LIB)/libdai$(LE)
-	$(CC) $(CCO)utils/fg2dot$(EE) utils/fg2dot.cpp $(LIBS)
+	$(CC) $(CCO)$@ $< $(LIBS)
 
 utils/fginfo$(EE) : utils/fginfo.cpp $(HEADERS) $(LIB)/libdai$(LE)
-	$(CC) $(CCO)utils/fginfo$(EE) utils/fginfo.cpp $(LIBS)
+	$(CC) $(CCO)$@ $< $(LIBS)
 
 
 # LIBRARY
@@ -353,6 +328,7 @@ clean :
 	-rm matlab/*$(ME)
 	-rm examples/example$(EE) examples/example_bipgraph$(EE) examples/example_varset$(EE) examples/example_permute$(EE) examples/example_sprinkler$(EE) examples/example_sprinkler_gibbs$(EE) examples/example_sprinkler_em$(EE)
 	-rm tests/testdai$(EE) tests/testem/testem$(EE) tests/testbbp$(EE)
+	-rm tests/unit/var$(EE) tests/unit/smallset$(EE) tests/unit/varset$(EE) tests/unit/graph$(EE) tests/unit/bipgraph$(EE) tests/unit/weightedgraph$(EE) tests/unit/enum$(EE) tests/unit/util$(EE) tests/unit/properties$(EE) tests/unit/index$(EE) tests/unit/prob$(EE)
 	-rm utils/fg2dot$(EE) utils/createfg$(EE) utils/fginfo$(EE)
 	-rm -R doc
 	-rm -R lib
@@ -377,6 +353,19 @@ clean :
 	-del utils\*$(EE)
 	-del utils\*.pdb
 	-del utils\*.ilk
+	-del tests\unit\*.pdk
+	-del tests\unit\*.ilk
+	-del tests\unit\var$(EE)
+	-del tests\unit\smallset$(EE)
+	-del tests\unit\varset$(EE)
+	-del tests\unit\graph$(EE)
+	-del tests\unit\bipgraph$(EE)
+	-del tests\unit\weightedgraph$(EE)
+	-del tests\unit\enum$(EE)
+	-del tests\unit\util$(EE)
+	-del tests\unit\properties$(EE)
+	-del tests\unit\index$(EE)
+	-del tests\unit\prob$(EE)
 	-del $(LIB)\libdai$(LE)
 	-rmdir lib
 endif

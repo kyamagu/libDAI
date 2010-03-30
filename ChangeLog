@@ -28,6 +28,70 @@ git sparse
 git master
 ----------
 
+* Improved prob.h/cpp:
+  - Added TProb<T>::operator==( const TProb<T> &q )
+  - TProb<T>::accumulate() now also applies op2 to init
+  - Fixed bug by renaming TProb<T>::operator<=() to TProb<T>::operator<()
+  - TProb<T>& operator/= (T x) now yields 0 when dividing by 0
+  - Changed format of TProb<T> when streamed to an ostream
+* Improved index.h/cpp:
+  - Added multifor::reset()
+* Improved properties.h/cpp:
+  - Renamed PropertySet::Set() -> PropertySet::set()
+  - Renamed PropertySet::Get() -> PropertySet::get()
+  - Renamed PropertySet::GetAs<T>() -> PropertySet::getAs<T>()
+  - Renamed PropertySet::ConvertTo<T>() -> PropertySet::convertTo<T>()
+  - Added PropertySet::size()
+  - Added PropertySet::clear()
+  - Added PropertySet::erase()
+  - Fixed bug in PropertySet::setAsString<T>()
+* Improved util.h/cpp:
+  - Fixed a bug in rnd_seed()
+  - Removed Real max( const std::vector<Real> &v )
+* Improved weightedgraph.h/cpp:
+  - Renamed MaxSpanningTreePrims into MaxSpanningTree
+  - Renamed MinSpanningTreePrims into MinSpanningTree
+  - Added option to MaxSpanningTree and MinSpanningTree for
+    choosing between Prim's algorithm and Kruskal's algorithm
+  - More error checking in RootedTree constructor
+  - The vertices in DEdge and UEdge are now named "first" and "second"
+    for compatibility with a std::pair<size_t,size_t>
+* Improved bipgraph.h/cpp:
+  - Fixed bug in BipartiteGraph::eraseNode1()
+  - Fixed bug in BipartiteGraph::eraseNode2()
+  - Fixed bug in BipartiteGraph::isTree()
+  - Added BipartiteGraph::hasEdge()
+  - Added BipartiteGraph::findNb1()
+  - Added BipartiteGraph::findNb2()
+  - BipartiteGraph::delta1() and BipartiteGraph::delta2() now 
+    return a SmallSet<size_t> instead of a vector<size_t>
+* Improved graph.h/cpp:
+  - Fixed bug in GraphAL::nrEdges()
+  - Fixed bug in GraphAL::addEdge()
+  - Fixed bug in GraphAL::isTree()
+  - Fixed bug in GraphAL::eraseNode()
+  - Fixed bug in GraphAL::printDot()
+  - Fixed bug in createGraphGrid3D()
+  - Fixed bug in createGraphRegular()
+  - Added GraphAL::hasEdge(size_t,size_t)
+* Improved smallset.h/cpp:
+  - The sizeHint argument of the iterator constructor
+     SmallSet::SmallSet( TIterator begin, TIterator end, size_t sizeHint=0 )
+    no longer has a default value in order to avoid confusion with the
+     SmallSet::SmallSet( const T &t1, const T &t2 )
+    constructor.
+* Removed RandomDRegularGraph()
+* Compressed Makefile
+* Added unit tests for var, smallset, varset, graph, bipgraph,
+  weightedgraph, enum, util, properties, index, prob
+* Added unit testing framework
+* Added initialization of TRWBP weights by sampling spanning trees
+* Cleaned up MR code:
+  - rewrote response propagation implementation with help of BBP
+  - now uses GraphAL to represent the Markov graph
+  - miscellaneous smaller cleanups
+* Fixed bug in BBPCostFunction::operator=() which prevented the desired 
+  assignment from happening
 * [Stefano Pellegrini] Fixed bug in BP[logdomain=1,inference=MAXPROD]
 * Removed deprecated functionality
 * Updated ChangeLog for libDAI-0.2.4 (forgot a few entries)
@@ -711,4 +775,4 @@ description in the help).
 
 0.1.0   (2006-02-28)
 --------------------
-First version worthy a version number.
+First version worthy of a version number.

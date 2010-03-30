@@ -48,4 +48,4 @@ NEW_MATLAB=true
 # or 0 for sparse factors implemented using a map, or non-zero
 # for sparse factors implemented using a vector)
 # NOTE: sparse factors are experimental!
-DAI_SPARSE=0
+DAI_SPARSE=

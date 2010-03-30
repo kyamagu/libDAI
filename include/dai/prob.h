@@ -43,10 +43,14 @@ namespace dai {
  *
  *  \tparam T Should be a scalar that is castable from and to dai::Real and should support elementary arithmetic operations.
  */
-template <typename T> class TProb {
+template <typename T>
+class TProb {
     private:
-        /// The vector
-        std::vector<T> _p;
+        /// Type of data structure used for storing the values
+        typedef std::vector<T> container_type;
+
+        /// The data structure that stores the values
+        container_type _p;
 
     public:
     /// \name Constructors and destructors
@@ -74,7 +78,7 @@ template <typename T> class TProb {
 
         /// Construct vector from another vector
         /** \tparam S type of elements in \a v (should be castable to type \a T)
-         *  \param v vector used for initialization
+         *  \param v vector used for initialization.
          */
         template <typename S>
         TProb( const std::vector<S> &v ) : _p() {
@@ -84,13 +88,13 @@ template <typename T> class TProb {
     //@}
 
         /// Constant iterator over the elements
-        typedef typename std::vector<T>::const_iterator const_iterator;
+        typedef typename container_type::const_iterator const_iterator;
         /// Iterator over the elements
-        typedef typename std::vector<T>::iterator iterator;
+        typedef typename container_type::iterator iterator;
         /// Constant reverse iterator over the elements
-        typedef typename std::vector<T>::const_reverse_iterator const_reverse_iterator;
+        typedef typename container_type::const_reverse_iterator const_reverse_iterator;
         /// Reverse iterator over the elements
-        typedef typename std::vector<T>::reverse_iterator reverse_iterator;
+        typedef typename container_type::reverse_iterator reverse_iterator;
 
     /// \name Iterator interface
     //@{
@@ -132,11 +136,11 @@ template <typename T> class TProb {
 
     /// \name Queries
     //@{
-        /// Returns a const reference to the wrapped vector
-        const std::vector<T> & p() const { return _p; }
+        /// Returns a const reference to the wrapped container
+        const container_type & p() const { return _p; }
 
-        /// Returns a reference to the wrapped vector
-        std::vector<T> & p() { return _p; }
+        /// Returns a reference to the wrapped container
+        container_type & p() { return _p; }
 
         /// Returns a copy of the \a i 'th entry
         T operator[]( size_t i ) const { return get(i); }
@@ -145,8 +149,16 @@ template <typename T> class TProb {
         size_t size() const { return _p.size(); }
 
         /// Accumulate over all values, similar to std::accumulate
+        /** The following calculation is done:
+         *  \code
+         *  T t = op2(init);
+         *  for( const_iterator it = begin(); it != end(); it++ )
+         *      t = op1( t, op2(*it) );
+         *  return t;
+         *  \endcode
+         */
         template<typename binOp, typename unOp> T accumulate( T init, binOp op1, unOp op2 ) const {
-            T t = init;
+            T t = op2(init);
             for( const_iterator it = begin(); it != end(); it++ )
                 t = op1( t, op2(*it) );
             return t;
@@ -173,7 +185,7 @@ template <typename T> class TProb {
         /// Returns \c true if one or more entries are NaN
         bool hasNaNs() const {
             bool foundnan = false;
-            for( typename std::vector<T>::const_iterator x = _p.begin(); x != _p.end(); x++ )
+            for( const_iterator x = _p.begin(); x != _p.end(); x++ )
                 if( isnan( *x ) ) {
                     foundnan = true;
                     break;
@@ -196,7 +208,7 @@ template <typename T> class TProb {
                 arg = i;
               }
             }
-            return std::make_pair(arg,max);
+            return std::make_pair( arg, max );
         }
 
         /// Returns a random index, according to the (normalized) distribution described by *this
@@ -214,9 +226,16 @@ template <typename T> class TProb {
         /// Lexicographical comparison
         /** \pre <tt>this->size() == q.size()</tt>
          */
-        bool operator<= (const TProb<T> & q) const {
+        bool operator<( const TProb<T>& q ) const {
             DAI_DEBASSERT( size() == q.size() );
             return lexicographical_compare( begin(), end(), q.begin(), q.end() );
+        }
+
+        /// Comparison
+        bool operator==( const TProb<T>& q ) const {
+            if( size() != q.size() )
+                return false;
+            return p() == q.p();
         }
     //@}
 
@@ -361,11 +380,10 @@ template <typename T> class TProb {
                 return *this;
         }
 
-        /// Divides each entry by scalar \a x
+        /// Divides each entry by scalar \a x, where division by 0 yields 0
         TProb<T>& operator/= (T x) {
-            DAI_DEBASSERT( x != 0 );
             if( x != 1 )
-                return pwUnaryOp( std::bind2nd( std::divides<T>(), x ) );
+                return pwUnaryOp( std::bind2nd( fo_divides0<T>(), x ) );
             else
                 return *this;
         }
@@ -528,9 +546,10 @@ template<typename T> T dist( const TProb<T> &p, const TProb<T> &q, ProbDistType 
 /** \relates TProb
  */
 template<typename T> std::ostream& operator<< (std::ostream& os, const TProb<T>& p) {
-    os << "[";
-    std::copy( p.p().begin(), p.p().end(), std::ostream_iterator<T>(os, " ") );
-    os << "]";
+    os << "(";
+    for( typename TProb<T>::const_iterator it = p.begin(); it != p.end(); it++ )
+        os << (it != p.begin() ? ", " : "") << *it;
+    os << ")";
     return os;
 }
 
