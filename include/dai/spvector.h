@@ -64,11 +64,13 @@ class spvector {
         /** \tparam TIterator Iterates over instances that can be cast to \a T
          *  \param begin Points to first instance to be added.
          *  \param end Points just beyond last instance to be added.
+         *  \param sizeHint For efficiency, the number of entries can be speficied by \a sizeHint;
+         *    the value 0 can be given if the size is unknown, but this will result in a performance penalty.
          *  \param def Default value to use for the constructed sparse vector.
-         *  \param sizeHint For efficiency, the number of nondefault entries can be speficied by \a sizeHint.
+         *  \note In libDAI versions 0.2.4 and earlier, the \a sizeHint argument was optional.
          */
         template <typename TIterator>
-        spvector( TIterator begin, TIterator end, T def=T(), size_t sizeHint=0 ) : _p(), _size(0), _def(def) {
+        spvector( TIterator begin, TIterator end, size_t sizeHint, T def=T() ) : _p(), _size(0), _def(def) {
             if( sizeHint )
                 reserve( sizeHint );
             size_t iter = 0;
@@ -81,11 +83,13 @@ class spvector {
         /// Construct sparse vector from a dense vector
         /** \tparam S type of elements in \a v (should be castable to type \a T)
          *  \param v vector used for initialization.
-         *  \param def Default value to used for the constructed sparse vector.
-         *  \param sizeHint For efficiency, the number of nondefault entries can be speficied by \a sizeHint.
+         *  \param sizeHint For efficiency, the number of entries can be speficied by \a sizeHint;
+         *    the value 0 can be given if the size is unknown, but this will result in a performance penalty.
+         *  \param def Default value to use for the constructed sparse vector.
+         *  \note In libDAI versions 0.2.4 and earlier, the \a sizeHint argument was optional.
          */
         template <typename S>
-        spvector( const std::vector<S> &v, T def=T(), size_t sizeHint=0 ) : _p(), _size(v.size()), _def(def) {
+        spvector( const std::vector<S> &v, size_t sizeHint, T def=T() ) : _p(), _size(v.size()), _def(def) {
             if( sizeHint )
                 reserve( sizeHint );
             for( size_t i = 0; i < v.size(); i++ )
@@ -195,6 +199,17 @@ class spvector {
         /// Returns a copy of the \a i 'th entry
         T operator[]( size_t i ) const { return get(i); }
 
+        /// Comparison operator
+        bool operator==( const spvector<T>& q ) const {
+            if( size() != q.size() )
+                return false;
+            // OPTIMIZE
+            for( size_t i = 0; i < size(); i++ )
+                if( !(get(i) == q.get(i)) )
+                    return false;
+            return true;
+        }
+
         /// Returns number of nondefault values
         size_t nrNonDef() const { return _p.size(); }
 
@@ -216,7 +231,8 @@ class spvector {
 template<class T>
 std::ostream& operator << (std::ostream& os, const spvector<T> &x) {
     os << "(";
-    os << "def:" << x.def();
+    os << "size:" << x.size();
+    os << ", def:" << x.def();
     for( typename spvector<T>::const_iterator it = x.begin(); it != x.end(); it++ )
         os << ", " << it->first << ":" << it->second;
     os << ")";

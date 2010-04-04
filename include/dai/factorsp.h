@@ -49,7 +49,7 @@ namespace dai {
  *  ordering, which is defined by the one-to-one correspondence of a joint state
  *  in \f$\prod_{l\in L} X_l\f$ with a linear index in
  *  \f$\{0,1,\dots,\prod_{l\in L} S_l-1\}\f$ according to the mapping \f$\sigma\f$
- *  induced by VarSet::calcState(const std::map<Var,size_t> &).
+ *  induced by dai::calcLinearState().
  *
  *  \tparam T Should be a scalar that is castable from and to double and should support elementary arithmetic operations.
  *  \todo Define a better fileformat for .fg files (maybe using XML)?
@@ -96,11 +96,15 @@ class TFactorSp {
 
         /// Constructs factor depending on variables in \a vars, copying the values from \a p
         TFactorSp( const VarSet& vars, const TProbSp<T,spvector_type> &p ) : _vs(vars), _p(p) {
-            DAI_DEBASSERT( _vs.nrStates() == _p.size() );
+            DAI_ASSERT( _vs.nrStates() == _p.size() );
         }
 
         /// Constructs factor depending on variables in \a vars, permuting the values given in \a p accordingly
         TFactorSp( const std::vector<Var> &vars, const std::vector<T> &p ) : _vs(vars.begin(), vars.end(), vars.size()), _p(p.size()) {
+            size_t nrStates = 1;
+            for( size_t i = 0; i < vars.size(); i++ )
+                nrStates *= vars[i].states();
+            DAI_ASSERT( nrStates == p.size() );
             Permute permindex(vars);
             for( size_t li = 0; li < p.size(); ++li )
                 _p.set( permindex.convertLinearIndex(li), p[li] );
@@ -136,6 +140,12 @@ class TFactorSp {
         /// Returns the number of possible joint states of the variables on which the factor depends, \f$\prod_{l\in L} S_l\f$
         /** \note This is equal to the length of the value vector.
          */
+        size_t nrStates() const { return _p.size(); }
+
+        /// Returns the number of possible joint states of the variables on which the factor depends, \f$\prod_{l\in L} S_l\f$
+        /** \note This is equal to the length of the value vector.
+         *  \deprecated Please use dai::TFactorSp::nrStates() instead.
+         */
         size_t states() const { return _p.size(); }
 
         /// Returns the Shannon entropy of \c *this, \f$-\sum_i p_i \log p_i\f$
@@ -149,6 +159,9 @@ class TFactorSp {
 
         /// Returns sum of all values
         T sum() const { return _p.sum(); }
+        
+        /// Returns sum of absolute values
+        T sumAbs() const { return _p.sumAbs(); }
 
         /// Returns maximum absolute value of all values
         T maxAbs() const { return _p.maxAbs(); }
@@ -161,15 +174,28 @@ class TFactorSp {
 
         /// Returns strength of this factor (between variables \a i and \a j), as defined in eq. (52) of [\ref MoK07b]
         T strength( const Var &i, const Var &j ) const;
+
+        /// Comparison
+        bool operator==( const TFactorSp<T,spvector_type>& y ) const {
+            return (_vs == y._vs) && (_p == y._p);
+        }
     //@}
 
     /// \name Unary transformations
     //@{
-        /// Returns pointwise absolute value
-        TFactorSp<T,spvector_type> abs() const {
+        /// Returns negative of \c *this
+        TFactorSp<T,spvector_type> operator- () const { 
             // Note: the alternative (shorter) way of implementing this,
             //   return TFactorSp<T,spvector_type>( _vs, _p.abs() );
-            // is slower because it invokes the copy constructor of TProbSp
+            // is slower because it invokes the copy constructor of TProbSp<T>
+            TFactorSp<T,spvector_type> x;
+            x._vs = _vs;
+            x._p = -_p;
+            return x;
+        }
+
+        /// Returns pointwise absolute value
+        TFactorSp<T,spvector_type> abs() const {
             TFactorSp<T,spvector_type> x;
             x._vs = _vs;
             x._p = _p.abs();
@@ -205,6 +231,8 @@ class TFactorSp {
         }
 
         /// Returns normalized copy of \c *this, using the specified norm
+        /** \throw NOT_NORMALIZABLE if the norm is zero
+         */
         TFactorSp<T,spvector_type> normalized( ProbNormType norm=NORMPROB ) const {
             TFactorSp<T,spvector_type> x;
             x._vs = _vs;
@@ -216,19 +244,32 @@ class TFactorSp {
     /// \name Unary operations
     //@{
         /// Draws all values i.i.d. from a uniform distribution on [0,1)
-        TFactorSp<T,spvector_type> & randomize () { _p.randomize(); return *this; }
+        TFactorSp<T,spvector_type>& randomize() { _p.randomize(); return *this; }
 
         /// Sets all values to \f$1/n\f$ where \a n is the number of states
-        TFactorSp<T,spvector_type>& setUniform () { _p.setUniform(); return *this; }
+        TFactorSp<T,spvector_type>& setUniform() { _p.setUniform(); return *this; }
+
+        /// Applies absolute value pointwise
+        TFactorSp<T,spvector_type>& takeAbs() { _p.takeAbs(); return *this; }
+
+        /// Applies exponent pointwise
+        TFactorSp<T,spvector_type>& takeExp() { _p.takeExp(); return *this; }
+
+        /// Applies logarithm pointwise
+        /** If \a zero == \c true, uses <tt>log(0)==0</tt>; otherwise, <tt>log(0)==-Inf</tt>.
+         */
+        TFactorSp<T,spvector_type>& takeLog( bool zero = false ) { _p.takeLog(zero); return *this; }
 
         /// Normalizes factor using the specified norm
+        /** \throw NOT_NORMALIZABLE if the norm is zero
+         */
         T normalize( ProbNormType norm=NORMPROB ) { return _p.normalize( norm ); }
     //@}
 
     /// \name Operations with scalars
     //@{
         /// Sets all values to \a x
-        TFactorSp<T,spvector_type> & fill (T x) { _p.fill( x ); return *this; }
+        TFactorSp<T,spvector_type>& fill (T x) { _p.fill( x ); return *this; }
 
         /// Adds scalar \a x to each value
         TFactorSp<T,spvector_type>& operator+= (T x) { _p += x; return *this; }
@@ -430,7 +471,7 @@ class TFactorSp {
     //@{
         /// Returns a slice of \c *this, where the subset \a vars is in state \a varsState
         /** \pre \a vars sould be a subset of vars()
-         *  \pre \a varsState < vars.states()
+         *  \pre \a varsState < vars.nrStates()
          *
          *  The result is a factor that depends on the variables of *this except those in \a vars,
          *  obtained by setting the variables in \a vars to the joint state specified by the linear index
@@ -482,7 +523,7 @@ template<typename T, typename spvector_type> TFactorSp<T,spvector_type> TFactorS
 /*  TFactorSp<T,spvector_type> res( varsrem, T(0) );
     IndexFor i_vars (vars, _vs);
     IndexFor i_varsrem (varsrem, _vs);
-    for( size_t i = 0; i < states(); i++, ++i_vars, ++i_varsrem )
+    for( size_t i = 0; i < nrStates(); i++, ++i_vars, ++i_varsrem )
         if( (size_t)i_vars == varsState )
             res.set( i_varsrem, _p[i] );
 
@@ -678,7 +719,7 @@ template<typename T, typename spvector_type, typename binaryOp> TFactorSp<T,spve
 template<typename T, typename spvector_type> std::ostream& operator<< (std::ostream& os, const TFactorSp<T,spvector_type>& f) {
 //    os << "(" << f.vars() << ", " << f.p() << ")";
     os << "(" << f.vars() << ", (";
-    for( size_t i = 0; i < f.states(); i++ )
+    for( size_t i = 0; i < f.nrStates(); i++ )
         os << (i == 0 ? "" : ", ") << f[i];
     os << "))";
     return os;
@@ -704,8 +745,8 @@ template<typename T, typename spvector_type> T dist( const TFactorSp<T,spvector_
  *  \pre f.vars() == g.vars()
  */
 template<typename T, typename spvector_type> TFactorSp<T,spvector_type> max( const TFactorSp<T,spvector_type> &f, const TFactorSp<T,spvector_type> &g ) {
-    DAI_ASSERT( f._vs == g._vs );
-    return TFactorSp<T,spvector_type>( f._vs, max( f.p(), g.p() ) );
+    DAI_ASSERT( f.vars() == g.vars() );
+    return TFactorSp<T,spvector_type>( f.vars(), max( f.p(), g.p() ) );
 }
 
 
@@ -714,8 +755,8 @@ template<typename T, typename spvector_type> TFactorSp<T,spvector_type> max( con
  *  \pre f.vars() == g.vars()
  */
 template<typename T, typename spvector_type> TFactorSp<T,spvector_type> min( const TFactorSp<T,spvector_type> &f, const TFactorSp<T,spvector_type> &g ) {
-    DAI_ASSERT( f._vs == g._vs );
-    return TFactorSp<T,spvector_type>( f._vs, min( f.p(), g.p() ) );
+    DAI_ASSERT( f.vars() == g.vars() );
+    return TFactorSp<T,spvector_type>( f.vars(), min( f.p(), g.p() ) );
 }
 
 

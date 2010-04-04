@@ -32,18 +32,18 @@ BOOST_AUTO_TEST_CASE( ConstructorsTest ) {
     // check constructors
     Prob x1;
     BOOST_CHECK_EQUAL( x1.size(), 0 );
-    BOOST_CHECK( x1.p() == std::vector<Real>() );
+    BOOST_CHECK( x1.p() == Prob::container_type() );
 
     Prob x2( 3 );
     BOOST_CHECK_EQUAL( x2.size(), 3 );
-    BOOST_CHECK( x2.p() == std::vector<Real>( 3, 1.0 / 3.0 ) );
+    BOOST_CHECK( x2.p() == Prob::container_type( 3, 1.0 / 3.0 ) );
     BOOST_CHECK_EQUAL( x2[0], 1.0 / 3.0 );
     BOOST_CHECK_EQUAL( x2[1], 1.0 / 3.0 );
     BOOST_CHECK_EQUAL( x2[2], 1.0 / 3.0 );
 
     Prob x3( 4, 1.0 );
     BOOST_CHECK_EQUAL( x3.size(), 4 );
-    BOOST_CHECK( x3.p() == std::vector<Real>( 4, 1.0 ) );
+    BOOST_CHECK( x3.p() == Prob::container_type( 4, 1.0 ) );
     BOOST_CHECK_EQUAL( x3[0], 1.0 );
     BOOST_CHECK_EQUAL( x3[1], 1.0 );
     BOOST_CHECK_EQUAL( x3[2], 1.0 );
@@ -53,27 +53,32 @@ BOOST_AUTO_TEST_CASE( ConstructorsTest ) {
     x3.set( 2, 2.0 );
     x3.set( 3, 4.0 );
 
-    Prob x4( x3.begin(), x3.end() );
+    std::vector<Real> v;
+    v.push_back( 0.5 );
+    v.push_back( 1.0 );
+    v.push_back( 2.0 );
+    v.push_back( 4.0 );
+    Prob x4( v.begin(), v.end(), 0 );
     BOOST_CHECK_EQUAL( x4.size(), 4 );
     BOOST_CHECK( x4.p() == x3.p() );
+    BOOST_CHECK( x4 == x3 );
     BOOST_CHECK_EQUAL( x4[0], 0.5 );
     BOOST_CHECK_EQUAL( x4[1], 1.0 );
     BOOST_CHECK_EQUAL( x4[2], 2.0 );
     BOOST_CHECK_EQUAL( x4[3], 4.0 );
 
-    x3.p() = std::vector<Real>( 4, 2.5 );
-    Prob x5( x3.begin(), x3.end(), x3.size() );
+    Prob x5( v.begin(), v.end(), v.size() );
     BOOST_CHECK_EQUAL( x5.size(), 4 );
     BOOST_CHECK( x5.p() == x3.p() );
-    BOOST_CHECK_EQUAL( x5[0], 2.5 );
-    BOOST_CHECK_EQUAL( x5[1], 2.5 );
-    BOOST_CHECK_EQUAL( x5[2], 2.5 );
-    BOOST_CHECK_EQUAL( x5[3], 2.5 );
+    BOOST_CHECK( x5 == x3 );
+    BOOST_CHECK_EQUAL( x5[0], 0.5 );
+    BOOST_CHECK_EQUAL( x5[1], 1.0 );
+    BOOST_CHECK_EQUAL( x5[2], 2.0 );
+    BOOST_CHECK_EQUAL( x5[3], 4.0 );
 
     std::vector<int> y( 3, 2 );
     Prob x6( y );
     BOOST_CHECK_EQUAL( x6.size(), 3 );
-    BOOST_CHECK( x6.p() == std::vector<Real>( 3, 2.0 ) );
     BOOST_CHECK_EQUAL( x6[0], 2.0 );
     BOOST_CHECK_EQUAL( x6[1], 2.0 );
     BOOST_CHECK_EQUAL( x6[2], 2.0 );
@@ -86,6 +91,7 @@ BOOST_AUTO_TEST_CASE( ConstructorsTest ) {
 }
 
 
+#ifndef DAI_SPARSE
 BOOST_AUTO_TEST_CASE( IteratorTest ) {
     Prob x( 5, 0.0 );
     size_t i;
@@ -116,6 +122,7 @@ BOOST_AUTO_TEST_CASE( IteratorTest ) {
     for( Prob::const_reverse_iterator crit = x.rbegin(); crit != x.rend(); crit++, i++ )
         BOOST_CHECK_EQUAL( *crit, 2 * i );
 }
+#endif
 
 
 BOOST_AUTO_TEST_CASE( QueriesTest ) {
@@ -125,37 +132,37 @@ BOOST_AUTO_TEST_CASE( QueriesTest ) {
 
     // test accumulate, min, max, sum, sumAbs, maxAbs
     BOOST_CHECK_EQUAL( x.sum(), 0.0 );
-    BOOST_CHECK_EQUAL( x.accumulate( 0.0, std::plus<Real>(), fo_id<Real>() ), 0.0 );
-    BOOST_CHECK_EQUAL( x.accumulate( 1.0, std::plus<Real>(), fo_id<Real>() ), 1.0 );
-    BOOST_CHECK_EQUAL( x.accumulate( -1.0, std::plus<Real>(), fo_id<Real>() ), -1.0 );
+    BOOST_CHECK_EQUAL( x.accumulate_sum( 0.0, fo_id<Real>() ), 0.0 );
+    BOOST_CHECK_EQUAL( x.accumulate_sum( 1.0, fo_id<Real>() ), 1.0 );
+    BOOST_CHECK_EQUAL( x.accumulate_sum( -1.0, fo_id<Real>() ), -1.0 );
     BOOST_CHECK_EQUAL( x.max(), 2.0 );
-    BOOST_CHECK_EQUAL( x.accumulate( -INFINITY, fo_max<Real>(), fo_id<Real>() ), 2.0 );
-    BOOST_CHECK_EQUAL( x.accumulate( 3.0, fo_max<Real>(), fo_id<Real>() ), 3.0 );
-    BOOST_CHECK_EQUAL( x.accumulate( -5.0, fo_max<Real>(), fo_id<Real>() ), 2.0 );
+    BOOST_CHECK_EQUAL( x.accumulate_max( -INFINITY, fo_id<Real>(), false ), 2.0 );
+    BOOST_CHECK_EQUAL( x.accumulate_max( 3.0, fo_id<Real>(), false ), 3.0 );
+    BOOST_CHECK_EQUAL( x.accumulate_max( -5.0, fo_id<Real>(), false ), 2.0 );
     BOOST_CHECK_EQUAL( x.min(), -2.0 );
-    BOOST_CHECK_EQUAL( x.accumulate( INFINITY, fo_min<Real>(), fo_id<Real>() ), -2.0 );
-    BOOST_CHECK_EQUAL( x.accumulate( -3.0, fo_min<Real>(), fo_id<Real>() ), -3.0 );
-    BOOST_CHECK_EQUAL( x.accumulate( 5.0, fo_min<Real>(), fo_id<Real>() ), -2.0 );
+    BOOST_CHECK_EQUAL( x.accumulate_max( INFINITY, fo_id<Real>(), true ), -2.0 );
+    BOOST_CHECK_EQUAL( x.accumulate_max( -3.0, fo_id<Real>(), true ), -3.0 );
+    BOOST_CHECK_EQUAL( x.accumulate_max( 5.0, fo_id<Real>(), true ), -2.0 );
     BOOST_CHECK_EQUAL( x.sumAbs(), 6.0 );
-    BOOST_CHECK_EQUAL( x.accumulate( 0.0, std::plus<Real>(), fo_abs<Real>() ), 6.0 );
-    BOOST_CHECK_EQUAL( x.accumulate( 1.0, std::plus<Real>(), fo_abs<Real>() ), 7.0 );
-    BOOST_CHECK_EQUAL( x.accumulate( -1.0, std::plus<Real>(), fo_abs<Real>() ), 7.0 );
+    BOOST_CHECK_EQUAL( x.accumulate_sum( 0.0, fo_abs<Real>() ), 6.0 );
+    BOOST_CHECK_EQUAL( x.accumulate_sum( 1.0, fo_abs<Real>() ), 7.0 );
+    BOOST_CHECK_EQUAL( x.accumulate_sum( -1.0, fo_abs<Real>() ), 7.0 );
     BOOST_CHECK_EQUAL( x.maxAbs(), 2.0 );
-    BOOST_CHECK_EQUAL( x.accumulate( 0.0, fo_max<Real>(), fo_abs<Real>() ), 2.0 );
-    BOOST_CHECK_EQUAL( x.accumulate( 1.0, fo_max<Real>(), fo_abs<Real>() ), 2.0 );
-    BOOST_CHECK_EQUAL( x.accumulate( -1.0, fo_max<Real>(), fo_abs<Real>() ), 2.0 );
-    BOOST_CHECK_EQUAL( x.accumulate( 3.0, fo_max<Real>(), fo_abs<Real>() ), 3.0 );
-    BOOST_CHECK_EQUAL( x.accumulate( -3.0, fo_max<Real>(), fo_abs<Real>() ), 3.0 );
+    BOOST_CHECK_EQUAL( x.accumulate_max( 0.0, fo_abs<Real>(), false ), 2.0 );
+    BOOST_CHECK_EQUAL( x.accumulate_max( 1.0, fo_abs<Real>(), false ), 2.0 );
+    BOOST_CHECK_EQUAL( x.accumulate_max( -1.0, fo_abs<Real>(), false ), 2.0 );
+    BOOST_CHECK_EQUAL( x.accumulate_max( 3.0, fo_abs<Real>(), false ), 3.0 );
+    BOOST_CHECK_EQUAL( x.accumulate_max( -3.0, fo_abs<Real>(), false ), 3.0 );
     x.set( 1, 1.0 );
     BOOST_CHECK_EQUAL( x.maxAbs(), 2.0 );
-    BOOST_CHECK_EQUAL( x.accumulate( 0.0, fo_max<Real>(), fo_abs<Real>() ), 2.0 );
-    BOOST_CHECK_EQUAL( x.accumulate( 1.0, fo_max<Real>(), fo_abs<Real>() ), 2.0 );
-    BOOST_CHECK_EQUAL( x.accumulate( -1.0, fo_max<Real>(), fo_abs<Real>() ), 2.0 );
-    BOOST_CHECK_EQUAL( x.accumulate( 3.0, fo_max<Real>(), fo_abs<Real>() ), 3.0 );
-    BOOST_CHECK_EQUAL( x.accumulate( -3.0, fo_max<Real>(), fo_abs<Real>() ), 3.0 );
+    BOOST_CHECK_EQUAL( x.accumulate_max( 0.0, fo_abs<Real>(), false ), 2.0 );
+    BOOST_CHECK_EQUAL( x.accumulate_max( 1.0, fo_abs<Real>(), false ), 2.0 );
+    BOOST_CHECK_EQUAL( x.accumulate_max( -1.0, fo_abs<Real>(), false ), 2.0 );
+    BOOST_CHECK_EQUAL( x.accumulate_max( 3.0, fo_abs<Real>(), false ), 3.0 );
+    BOOST_CHECK_EQUAL( x.accumulate_max( -3.0, fo_abs<Real>(), false ), 3.0 );
     for( size_t i = 0; i < x.size(); i++ )
         x.set( i, i ? (1.0 / i) : 0.0 );
-    BOOST_CHECK_EQUAL( x.accumulate( 0.0, std::plus<Real>(), fo_inv0<Real>() ), 10.0 );
+    BOOST_CHECK_EQUAL( x.accumulate_sum( 0.0, fo_inv0<Real>() ), 10.0 );
     x /= x.sum();
 
     // test entropy
@@ -723,15 +730,28 @@ BOOST_AUTO_TEST_CASE( RelatedFunctionsTest ) {
     BOOST_CHECK_EQUAL( dist( x, y, DISTKL ), x.innerProduct( y, 0.0, std::plus<Real>(), fo_KL<Real>() ) );
     BOOST_CHECK_EQUAL( dist( y, x, DISTKL ), y.innerProduct( x, 0.0, std::plus<Real>(), fo_KL<Real>() ) );
 
+    Prob xx(4), yy(4);
+    for( size_t i = 0; i < 3; i++ ) {
+        xx.set( i, x[i] );
+        yy.set( i, y[i] );
+    }
     std::stringstream ss;
-    ss << x;
+    ss << xx;
     std::string s;
     std::getline( ss, s );
-    BOOST_CHECK_EQUAL( s, std::string("(0.2, 0.7, 0.1)") );
+#ifdef DAI_SPARSE
+    BOOST_CHECK_EQUAL( s, std::string("(size:4, def:0.25, 0:0.2, 1:0.7, 2:0.1)") );
+#else
+    BOOST_CHECK_EQUAL( s, std::string("(0.2, 0.7, 0.1, 0.25)") );
+#endif
     std::stringstream ss2;
-    ss2 << y;
+    ss2 << yy;
     std::getline( ss2, s );
-    BOOST_CHECK_EQUAL( s, std::string("(0.1, 0.5, 0.4)") );
+#ifdef DAI_SPARSE
+    BOOST_CHECK_EQUAL( s, std::string("(size:4, def:0.25, 0:0.1, 1:0.5, 2:0.4)") );
+#else
+    BOOST_CHECK_EQUAL( s, std::string("(0.1, 0.5, 0.4, 0.25)") );
+#endif
 
     z = min( x, y );
     BOOST_CHECK_EQUAL( z[0], 0.1 );
