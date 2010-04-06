@@ -55,6 +55,24 @@ class TProb {
         container_type _p;
 
     public:
+        /// Enumerates different ways of normalizing a probability measure.
+        /**
+         *  - NORMPROB means that the sum of all entries should be 1;
+         *  - NORMLINF means that the maximum absolute value of all entries should be 1.
+         *  \deprecated Please use dai::ProbNormType instead.
+         */
+        typedef enum { NORMPROB, NORMLINF } NormType;
+        /// Enumerates different distance measures between probability measures.
+        /**
+         *  - DISTL1 is the \f$\ell_1\f$ distance (sum of absolute values of pointwise difference);
+         *  - DISTLINF is the \f$\ell_\infty\f$ distance (maximum absolute value of pointwise difference);
+         *  - DISTTV is the total variation distance (half of the \f$\ell_1\f$ distance);
+         *  - DISTKL is the Kullback-Leibler distance (\f$\sum_i p_i (\log p_i - \log q_i)\f$).
+         *  - DISTHEL is the Hellinger distance (\f$\frac{1}{2}\sum_i (\sqrt{p_i}-\sqrt{q_i})^2\f$).
+         *  \deprecated Please use dai::ProbDistType instead.
+         */
+        typedef enum { DISTL1, DISTLINF, DISTTV, DISTKL, DISTHEL } DistType;
+
     /// \name Constructors and destructors
     //@{
         /// Default constructor (constructs empty vector)
@@ -72,7 +90,7 @@ class TProb {
          *  \param end Points just beyond last instance to be added.
          *  \param sizeHint For efficiency, the number of entries can be speficied by \a sizeHint;
          *    the value 0 can be given if the size is unknown, but this will result in a performance penalty.
-         *  \note In libDAI versions 0.2.4 and earlier, the \a sizeHint argument was optional.
+         *  \deprecated In future libDAI versions, the \a sizeHint argument will no longer default to 0.
          */
         template <typename TIterator>
         TProb( TIterator begin, TIterator end, size_t sizeHint ) : _p() {
@@ -170,8 +188,9 @@ class TProb {
          *      t += op(*it);
          *  return t;
          *  \endcode
+         *  \deprecated Please use dai::TProb::accumulateSum or dai::TProb::accumulateMax instead
          */
-        template<typename unOp> T accumulate_sum( T init, unOp op ) const {
+        template<typename unOp> T accumulateSum( T init, unOp op ) const {
             T t = op(init);
             for( const_iterator it = begin(); it != end(); it++ )
                 t += op(*it);
@@ -187,7 +206,45 @@ class TProb {
          *  return t;
          *  \endcode
          */
-        template<typename unOp> T accumulate_max( T init, unOp op, bool minimize ) const {
+        template<typename unOp> T accumulateMax( T init, unOp op, bool minimize ) const {
+            T t = op(init);
+            if( minimize ) {
+                for( const_iterator it = begin(); it != end(); it++ )
+                    t = std::min( t, op(*it) );
+            } else {
+                for( const_iterator it = begin(); it != end(); it++ )
+                    t = std::max( t, op(*it) );
+            }
+            return t;
+        }
+
+
+        /// Accumulate all values (similar to std::accumulate) by summing
+        /** The following calculation is done:
+         *  \code
+         *  T t = op(init);
+         *  for( const_iterator it = begin(); it != end(); it++ )
+         *      t += op(*it);
+         *  return t;
+         *  \endcode
+         */
+        template<typename unOp> T accumulateSum( T init, unOp op ) const {
+            T t = op(init);
+            for( const_iterator it = begin(); it != end(); it++ )
+                t += op(*it);
+            return t;
+        }
+
+        /// Accumulate all values (similar to std::accumulate) by maximization/minimization
+        /** The following calculation is done (with "max" replaced by "min" if \a minimize == \c true):
+         *  \code
+         *  T t = op(init);
+         *  for( const_iterator it = begin(); it != end(); it++ )
+         *      t = std::max( t, op(*it) );
+         *  return t;
+         *  \endcode
+         */
+        template<typename unOp> T accumulateMax( T init, unOp op, bool minimize ) const {
             T t = op(init);
             if( minimize ) {
                 for( const_iterator it = begin(); it != end(); it++ )
@@ -200,22 +257,22 @@ class TProb {
         }
 
         /// Returns the Shannon entropy of \c *this, \f$-\sum_i p_i \log p_i\f$
-        T entropy() const { return -accumulate_sum( (T)0, fo_plog0p<T>() ); }
+        T entropy() const { return -accumulateSum( (T)0, fo_plog0p<T>() ); }
 
         /// Returns maximum value of all entries
-        T max() const { return accumulate_max( (T)(-INFINITY), fo_id<T>(), false ); }
+        T max() const { return accumulateMax( (T)(-INFINITY), fo_id<T>(), false ); }
 
         /// Returns minimum value of all entries
-        T min() const { return accumulate_max( (T)INFINITY, fo_id<T>(), true ); }
+        T min() const { return accumulateMax( (T)INFINITY, fo_id<T>(), true ); }
 
         /// Returns sum of all entries
-        T sum() const { return accumulate_sum( (T)0, fo_id<T>() ); }
+        T sum() const { return accumulateSum( (T)0, fo_id<T>() ); }
 
         /// Return sum of absolute value of all entries
-        T sumAbs() const { return accumulate_sum( (T)0, fo_abs<T>() ); }
+        T sumAbs() const { return accumulateSum( (T)0, fo_abs<T>() ); }
 
         /// Returns maximum absolute value of all entries
-        T maxAbs() const { return accumulate_max( (T)0, fo_abs<T>(), false ); }
+        T maxAbs() const { return accumulateMax( (T)0, fo_abs<T>(), false ); }
 
         /// Returns \c true if one or more entries are NaN
         bool hasNaNs() const {
@@ -318,9 +375,9 @@ class TProb {
          */
         this_type normalized( ProbNormType norm = NORMPROB ) const {
             T Z = 0;
-            if( norm == NORMPROB )
+            if( norm == dai::NORMPROB )
                 Z = sum();
-            else if( norm == NORMLINF )
+            else if( norm == dai::NORMLINF )
                 Z = maxAbs();
             if( Z == (T)0 ) {
                 DAI_THROW(NOT_NORMALIZABLE);
@@ -371,9 +428,9 @@ class TProb {
          */
         T normalize( ProbNormType norm=NORMPROB ) {
             T Z = 0;
-            if( norm == NORMPROB )
+            if( norm == dai::NORMPROB )
                 Z = sum();
-            else if( norm == NORMLINF )
+            else if( norm == dai::NORMLINF )
                 Z = maxAbs();
             if( Z == (T)0 )
                 DAI_THROW(NOT_NORMALIZABLE);

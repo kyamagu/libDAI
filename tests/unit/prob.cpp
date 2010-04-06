@@ -132,37 +132,37 @@ BOOST_AUTO_TEST_CASE( QueriesTest ) {
 
     // test accumulate, min, max, sum, sumAbs, maxAbs
     BOOST_CHECK_EQUAL( x.sum(), 0.0 );
-    BOOST_CHECK_EQUAL( x.accumulate_sum( 0.0, fo_id<Real>() ), 0.0 );
-    BOOST_CHECK_EQUAL( x.accumulate_sum( 1.0, fo_id<Real>() ), 1.0 );
-    BOOST_CHECK_EQUAL( x.accumulate_sum( -1.0, fo_id<Real>() ), -1.0 );
+    BOOST_CHECK_EQUAL( x.accumulateSum( 0.0, fo_id<Real>() ), 0.0 );
+    BOOST_CHECK_EQUAL( x.accumulateSum( 1.0, fo_id<Real>() ), 1.0 );
+    BOOST_CHECK_EQUAL( x.accumulateSum( -1.0, fo_id<Real>() ), -1.0 );
     BOOST_CHECK_EQUAL( x.max(), 2.0 );
-    BOOST_CHECK_EQUAL( x.accumulate_max( -INFINITY, fo_id<Real>(), false ), 2.0 );
-    BOOST_CHECK_EQUAL( x.accumulate_max( 3.0, fo_id<Real>(), false ), 3.0 );
-    BOOST_CHECK_EQUAL( x.accumulate_max( -5.0, fo_id<Real>(), false ), 2.0 );
+    BOOST_CHECK_EQUAL( x.accumulateMax( -INFINITY, fo_id<Real>(), false ), 2.0 );
+    BOOST_CHECK_EQUAL( x.accumulateMax( 3.0, fo_id<Real>(), false ), 3.0 );
+    BOOST_CHECK_EQUAL( x.accumulateMax( -5.0, fo_id<Real>(), false ), 2.0 );
     BOOST_CHECK_EQUAL( x.min(), -2.0 );
-    BOOST_CHECK_EQUAL( x.accumulate_max( INFINITY, fo_id<Real>(), true ), -2.0 );
-    BOOST_CHECK_EQUAL( x.accumulate_max( -3.0, fo_id<Real>(), true ), -3.0 );
-    BOOST_CHECK_EQUAL( x.accumulate_max( 5.0, fo_id<Real>(), true ), -2.0 );
+    BOOST_CHECK_EQUAL( x.accumulateMax( INFINITY, fo_id<Real>(), true ), -2.0 );
+    BOOST_CHECK_EQUAL( x.accumulateMax( -3.0, fo_id<Real>(), true ), -3.0 );
+    BOOST_CHECK_EQUAL( x.accumulateMax( 5.0, fo_id<Real>(), true ), -2.0 );
     BOOST_CHECK_EQUAL( x.sumAbs(), 6.0 );
-    BOOST_CHECK_EQUAL( x.accumulate_sum( 0.0, fo_abs<Real>() ), 6.0 );
-    BOOST_CHECK_EQUAL( x.accumulate_sum( 1.0, fo_abs<Real>() ), 7.0 );
-    BOOST_CHECK_EQUAL( x.accumulate_sum( -1.0, fo_abs<Real>() ), 7.0 );
+    BOOST_CHECK_EQUAL( x.accumulateSum( 0.0, fo_abs<Real>() ), 6.0 );
+    BOOST_CHECK_EQUAL( x.accumulateSum( 1.0, fo_abs<Real>() ), 7.0 );
+    BOOST_CHECK_EQUAL( x.accumulateSum( -1.0, fo_abs<Real>() ), 7.0 );
     BOOST_CHECK_EQUAL( x.maxAbs(), 2.0 );
-    BOOST_CHECK_EQUAL( x.accumulate_max( 0.0, fo_abs<Real>(), false ), 2.0 );
-    BOOST_CHECK_EQUAL( x.accumulate_max( 1.0, fo_abs<Real>(), false ), 2.0 );
-    BOOST_CHECK_EQUAL( x.accumulate_max( -1.0, fo_abs<Real>(), false ), 2.0 );
-    BOOST_CHECK_EQUAL( x.accumulate_max( 3.0, fo_abs<Real>(), false ), 3.0 );
-    BOOST_CHECK_EQUAL( x.accumulate_max( -3.0, fo_abs<Real>(), false ), 3.0 );
+    BOOST_CHECK_EQUAL( x.accumulateMax( 0.0, fo_abs<Real>(), false ), 2.0 );
+    BOOST_CHECK_EQUAL( x.accumulateMax( 1.0, fo_abs<Real>(), false ), 2.0 );
+    BOOST_CHECK_EQUAL( x.accumulateMax( -1.0, fo_abs<Real>(), false ), 2.0 );
+    BOOST_CHECK_EQUAL( x.accumulateMax( 3.0, fo_abs<Real>(), false ), 3.0 );
+    BOOST_CHECK_EQUAL( x.accumulateMax( -3.0, fo_abs<Real>(), false ), 3.0 );
     x.set( 1, 1.0 );
     BOOST_CHECK_EQUAL( x.maxAbs(), 2.0 );
-    BOOST_CHECK_EQUAL( x.accumulate_max( 0.0, fo_abs<Real>(), false ), 2.0 );
-    BOOST_CHECK_EQUAL( x.accumulate_max( 1.0, fo_abs<Real>(), false ), 2.0 );
-    BOOST_CHECK_EQUAL( x.accumulate_max( -1.0, fo_abs<Real>(), false ), 2.0 );
-    BOOST_CHECK_EQUAL( x.accumulate_max( 3.0, fo_abs<Real>(), false ), 3.0 );
-    BOOST_CHECK_EQUAL( x.accumulate_max( -3.0, fo_abs<Real>(), false ), 3.0 );
+    BOOST_CHECK_EQUAL( x.accumulateMax( 0.0, fo_abs<Real>(), false ), 2.0 );
+    BOOST_CHECK_EQUAL( x.accumulateMax( 1.0, fo_abs<Real>(), false ), 2.0 );
+    BOOST_CHECK_EQUAL( x.accumulateMax( -1.0, fo_abs<Real>(), false ), 2.0 );
+    BOOST_CHECK_EQUAL( x.accumulateMax( 3.0, fo_abs<Real>(), false ), 3.0 );
+    BOOST_CHECK_EQUAL( x.accumulateMax( -3.0, fo_abs<Real>(), false ), 3.0 );
     for( size_t i = 0; i < x.size(); i++ )
         x.set( i, i ? (1.0 / i) : 0.0 );
-    BOOST_CHECK_EQUAL( x.accumulate_sum( 0.0, fo_inv0<Real>() ), 10.0 );
+    BOOST_CHECK_EQUAL( x.accumulateSum( 0.0, fo_inv0<Real>() ), 10.0 );
     x /= x.sum();
 
     // test entropy
