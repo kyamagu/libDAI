@@ -180,44 +180,22 @@ class TProb {
         /// Returns length of the vector (i.e., the number of entries)
         size_t size() const { return _p.size(); }
 
-        /// Accumulate all values (similar to std::accumulate) by summing
+        /// Accumulate over all values, similar to std::accumulate
         /** The following calculation is done:
          *  \code
-         *  T t = op(init);
+         *  T t = op2(init);
          *  for( const_iterator it = begin(); it != end(); it++ )
-         *      t += op(*it);
+         *      t = op1( t, op2(*it) );
          *  return t;
          *  \endcode
          *  \deprecated Please use dai::TProb::accumulateSum or dai::TProb::accumulateMax instead
          */
-        template<typename unOp> T accumulateSum( T init, unOp op ) const {
-            T t = op(init);
+        template<typename binOp, typename unOp> T accumulate( T init, binOp op1, unOp op2 ) const {
+            T t = op2(init);
             for( const_iterator it = begin(); it != end(); it++ )
-                t += op(*it);
+                t = op1( t, op2(*it) );
             return t;
         }
-
-        /// Accumulate all values (similar to std::accumulate) by maximization/minimization
-        /** The following calculation is done (with "max" replaced by "min" if \a minimize == \c true):
-         *  \code
-         *  T t = op(init);
-         *  for( const_iterator it = begin(); it != end(); it++ )
-         *      t = std::max( t, op(*it) );
-         *  return t;
-         *  \endcode
-         */
-        template<typename unOp> T accumulateMax( T init, unOp op, bool minimize ) const {
-            T t = op(init);
-            if( minimize ) {
-                for( const_iterator it = begin(); it != end(); it++ )
-                    t = std::min( t, op(*it) );
-            } else {
-                for( const_iterator it = begin(); it != end(); it++ )
-                    t = std::max( t, op(*it) );
-            }
-            return t;
-        }
-
 
         /// Accumulate all values (similar to std::accumulate) by summing
         /** The following calculation is done:
@@ -373,7 +351,7 @@ class TProb {
         /// Returns normalized copy of \c *this, using the specified norm
         /** \throw NOT_NORMALIZABLE if the norm is zero
          */
-        this_type normalized( ProbNormType norm = NORMPROB ) const {
+        this_type normalized( ProbNormType norm = dai::NORMPROB ) const {
             T Z = 0;
             if( norm == dai::NORMPROB )
                 Z = sum();
@@ -426,7 +404,7 @@ class TProb {
         /// Normalizes vector using the specified norm
         /** \throw NOT_NORMALIZABLE if the norm is zero
          */
-        T normalize( ProbNormType norm=NORMPROB ) {
+        T normalize( ProbNormType norm = dai::NORMPROB ) {
             T Z = 0;
             if( norm == dai::NORMPROB )
                 Z = sum();
