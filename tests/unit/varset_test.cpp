@@ -8,9 +8,6 @@
  */
 
 
-#define BOOST_TEST_DYN_LINK
-
-
 #include <dai/varset.h>
 #include <vector>
 #include <map>
@@ -148,7 +145,7 @@ BOOST_AUTO_TEST_CASE( IteratorTest ) {
         BOOST_CHECK_EQUAL( i, rj->label() );
         BOOST_CHECK_EQUAL( i, rk->label() );
     }
-    BOOST_CHECK( rj == x.rend() );
+    BOOST_CHECK( rj == static_cast<VarSet::const_reverse_iterator>(x.rend()) );
     BOOST_CHECK( rk == x.rend() );
 }
 

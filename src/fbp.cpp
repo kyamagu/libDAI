@@ -25,14 +25,6 @@ namespace dai {
 using namespace std;
 
 
-const char *FBP::Name = "FBP";
-
-
-string FBP::identify() const {
-    return string(Name) + printProperties();
-}
-
-
 // This code has been copied from bp.cpp, except where comments indicate FBP-specific behaviour
 Real FBP::logZ() const {
     Real sum = 0.0;
@@ -44,7 +36,8 @@ Real FBP::logZ() const {
         Real c_i = 0.0;
         foreach( const Neighbor &I, nbV(i) )
             c_i += Weight(I);
-        sum += (1.0 - c_i) * beliefV(i).entropy();  // FBP
+        if( c_i != 1.0 )
+            sum += (1.0 - c_i) * beliefV(i).entropy();  // FBP
     }
     return sum;
 }
@@ -69,19 +62,20 @@ Prob FBP::calcIncomingMessageProduct( size_t I, bool without_i, size_t i ) const
             // prod_j will be the product of messages coming into j
             // FBP: corresponds to messages n_jI
             Prob prod_j( var(j).states(), props.logdomain ? 0.0 : 1.0 );
-            foreach( const Neighbor &J, nbV(j) )
+            foreach( const Neighbor &J, nbV(j) ) {
                 if( J != I ) { // for all J in nb(j) \ I
                     if( props.logdomain )
                         prod_j += message( j, J.iter );
                     else
                         prod_j *= message( j, J.iter );
-                } else {
+                } else if( c_I != 1.0 ) {
                     // FBP: multiply by m_Ij^(1-1/c_I)
                     if( props.logdomain )
                         prod_j += newMessage( j, J.iter) * (1.0 - 1.0 / c_I);
                     else
                         prod_j *= newMessage( j, J.iter) ^ (1.0 - 1.0 / c_I);
                 }
+            }
 
             // multiply prod with prod_j
             if( !DAI_FBP_FAST ) {
@@ -102,7 +96,7 @@ Prob FBP::calcIncomingMessageProduct( size_t I, bool without_i, size_t i ) const
                     else
                         prod.set( r, prod[r] * prod_j[ind[r]] );
             }
-    }
+        }
     return prod;
 }
 

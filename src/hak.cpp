@@ -21,9 +21,6 @@ namespace dai {
 using namespace std;
 
 
-const char *HAK::Name = "HAK";
-
-
 /// Sets factor entries that lie between 0 and \a epsilon to \a epsilon
 template <class T>
 TFactor<T>& makePositive( TFactor<T> &f, T epsilon ) {
@@ -45,17 +42,25 @@ TFactor<T>& makeZero( TFactor<T> &f, T epsilon ) {
 
 void HAK::setProperties( const PropertySet &opts ) {
     DAI_ASSERT( opts.hasKey("tol") );
-    DAI_ASSERT( opts.hasKey("maxiter") );
-    DAI_ASSERT( opts.hasKey("verbose") );
     DAI_ASSERT( opts.hasKey("doubleloop") );
     DAI_ASSERT( opts.hasKey("clusters") );
 
     props.tol = opts.getStringAs<Real>("tol");
-    props.maxiter = opts.getStringAs<size_t>("maxiter");
-    props.verbose = opts.getStringAs<size_t>("verbose");
     props.doubleloop = opts.getStringAs<bool>("doubleloop");
     props.clusters = opts.getStringAs<Properties::ClustersType>("clusters");
 
+    if( opts.hasKey("maxiter") )
+        props.maxiter = opts.getStringAs<size_t>("maxiter");
+    else
+        props.maxiter = 10000;
+    if( opts.hasKey("maxtime") )
+        props.maxtime = opts.getStringAs<Real>("maxtime");
+    else
+        props.maxtime = INFINITY;
+    if( opts.hasKey("verbose") )
+        props.verbose = opts.getStringAs<size_t>("verbose");
+    else
+        props.verbose = 0;
     if( opts.hasKey("loopdepth") )
         props.loopdepth = opts.getStringAs<size_t>("loopdepth");
     else
@@ -75,6 +80,7 @@ PropertySet HAK::getProperties() const {
     PropertySet opts;
     opts.set( "tol", props.tol );
     opts.set( "maxiter", props.maxiter );
+    opts.set( "maxtime", props.maxtime );
     opts.set( "verbose", props.verbose );
     opts.set( "doubleloop", props.doubleloop );
     opts.set( "clusters", props.clusters );
@@ -90,6 +96,7 @@ string HAK::printProperties() const {
     s << "[";
     s << "tol=" << props.tol << ",";
     s << "maxiter=" << props.maxiter << ",";
+    s << "maxtime=" << props.maxtime << ",";
     s << "verbose=" << props.verbose << ",";
     s << "doubleloop=" << props.doubleloop << ",";
     s << "clusters=" << props.clusters << ",";
@@ -102,18 +109,24 @@ string HAK::printProperties() const {
 
 void HAK::construct() {
     // Create outer beliefs
+    if( props.verbose >= 3 )
+        cerr << "Constructing outer beliefs" << endl;
     _Qa.clear();
     _Qa.reserve(nrORs());
     for( size_t alpha = 0; alpha < nrORs(); alpha++ )
         _Qa.push_back( Factor( OR(alpha) ) );
 
     // Create inner beliefs
+    if( props.verbose >= 3 )
+        cerr << "Constructing inner beliefs" << endl;
     _Qb.clear();
     _Qb.reserve(nrIRs());
     for( size_t beta = 0; beta < nrIRs(); beta++ )
         _Qb.push_back( Factor( IR(beta) ) );
 
     // Create messages
+    if( props.verbose >= 3 )
+        cerr << "Constructing messages" << endl;
     _muab.clear();
     _muab.reserve( nrORs() );
     _muba.clear();
@@ -152,9 +165,12 @@ void HAK::findLoopClusters( const FactorGraph & fg, std::set<VarSet> &allcl, Var
 HAK::HAK(const FactorGraph & fg, const PropertySet &opts) : DAIAlgRG(), _Qa(), _Qb(), _muab(), _muba(), _maxdiff(0.0), _iters(0U), props() {
     setProperties( opts );
 
+    if( props.verbose >= 3 )
+        cerr << "Constructing clusters" << endl;
+
     vector<VarSet> cl;
     if( props.clusters == Properties::ClustersType::MIN ) {
-        cl = fg.Cliques();
+        cl = fg.maximalFactorDomains();
         constructCVM( fg, cl );
     } else if( props.clusters == Properties::ClustersType::DELTA ) {
         cl.reserve( fg.nrVars() );
@@ -162,59 +178,91 @@ HAK::HAK(const FactorGraph & fg, const PropertySet &opts) : DAIAlgRG(), _Qa(), _
             cl.push_back( fg.Delta(i) );
         constructCVM( fg, cl );
     } else if( props.clusters == Properties::ClustersType::LOOP ) {
-        cl = fg.Cliques();
+        cl = fg.maximalFactorDomains();
         set<VarSet> scl;
+        if( props.verbose >= 2 )
+            cerr << "Searching loops...";
         for( size_t i0 = 0; i0 < fg.nrVars(); i0++ ) {
             VarSet i0d = fg.delta(i0);
             if( props.loopdepth > 1 )
                 findLoopClusters( fg, scl, fg.var(i0), fg.var(i0), props.loopdepth - 1, fg.delta(i0) );
         }
+        if( props.verbose >= 2 )
+            cerr << "done" << endl;
         for( set<VarSet>::const_iterator c = scl.begin(); c != scl.end(); c++ )
             cl.push_back(*c);
         if( props.verbose >= 3 ) {
-            cerr << Name << " uses the following clusters: " << endl;
+            cerr << name() << " uses the following clusters: " << endl;
             for( vector<VarSet>::const_iterator cli = cl.begin(); cli != cl.end(); cli++ )
                 cerr << *cli << endl;
         }
         constructCVM( fg, cl );
     } else if( props.clusters == Properties::ClustersType::BETHE ) {
-        // build outer regions (the cliques)
-        cl = fg.Cliques();
-        size_t nrEdges = 0;
-        for( size_t c = 0; c < cl.size(); c++ )
-            nrEdges += cl[c].size();
+        // Copy factor graph structure
+        if( props.verbose >= 3 )
+            cerr << "Copying factor graph" << endl;
+        FactorGraph::operator=( fg );
 
-        // build inner regions (single variables)
-        vector<Region> irs;
-        irs.reserve( fg.nrVars() );
+        // Construct inner regions (single variables)
+        if( props.verbose >= 3 )
+            cerr << "Constructing inner regions" << endl;
+        _IRs.reserve( fg.nrVars() );
         for( size_t i = 0; i < fg.nrVars(); i++ )
-            irs.push_back( Region( fg.var(i), 1.0 ) );
+            _IRs.push_back( Region( fg.var(i), 1.0 ) );
 
-        // build edges (an outer and inner region are connected if the outer region contains the inner one)
-        // and calculate counting number for inner regions
-        vector<std::pair<size_t, size_t> > edges;
-        edges.reserve( nrEdges );
-        for( size_t c = 0; c < cl.size(); c++ )
-            for( size_t i = 0; i < irs.size(); i++ )
-                if( cl[c] >> irs[i] ) {
-                    edges.push_back( make_pair( c, i ) );
-                    irs[i].c() -= 1.0;
-                }
+        // Construct graph
+        if( props.verbose >= 3 )
+            cerr << "Constructing graph" << endl;
+        _G = BipartiteGraph( 0, nrIRs() );
 
-        // build region graph
-        RegionGraph::construct( fg, cl, irs, edges );
+        // Construct outer regions:
+        // maximal factors become new outer regions
+        // non-maximal factors are assigned an outer region that contains them
+        if( props.verbose >= 3 )
+            cerr << "Construct outer regions" << endl;
+        _fac2OR.reserve( nrFactors() );
+        queue<pair<size_t, size_t> > todo;
+        for( size_t I = 0; I < fg.nrFactors(); I++ ) {
+            size_t J = fg.maximalFactor( I );
+            if( J == I ) {
+                // I is maximal; add it to the outer regions
+                _fac2OR.push_back( nrORs() );
+                // Construct outer region (with counting number 1.0)
+                _ORs.push_back( FRegion( fg.factor(I), 1.0 ) );
+                // Add node and edges to graph
+                SmallSet<size_t> irs = fg.bipGraph().nb2Set( I );
+                _G.addNode1( irs.begin(), irs.end(), irs.size() );
+            } else if( J < I ) {
+                // J is larger and has already been assigned to an outer region
+                // so I should belong to the same outer region as J
+                _fac2OR.push_back( _fac2OR[J] );
+                _ORs[_fac2OR[J]] *= fg.factor(I);
+            } else {
+                // J is larger but has not yet been assigned to an outer region
+                // we handle this case later
+                _fac2OR.push_back( -1 );
+                todo.push( make_pair( I, J ) );
+            }
+        }
+        // finish the construction
+        while( !todo.empty() ) {
+            size_t I = todo.front().first;
+            size_t J = todo.front().second;
+            todo.pop();
+            _fac2OR[I] = _fac2OR[J];
+            _ORs[_fac2OR[J]] *= fg.factor(I);
+        }
+
+        // Calculate inner regions' counting numbers
+        for( size_t beta = 0; beta < nrIRs(); beta++ )
+            _IRs[beta].c() = 1.0 - _G.nb2(beta).size();
     } else
         DAI_THROW(UNKNOWN_ENUM_VALUE);
 
     construct();
 
     if( props.verbose >= 3 )
-        cerr << Name << " regiongraph: " << *this << endl;
-}
-
-
-string HAK::identify() const {
-    return string(Name) + printProperties();
+        cerr << name() << " regiongraph: " << *this << endl;
 }
 
 
@@ -331,7 +379,7 @@ Real HAK::doGBP() {
             Qb_new.normalize();
             if( Qb_new.hasNaNs() ) {
                 // TODO: WHAT TO DO IN THIS CASE?
-                cerr << Name << "::doGBP:  Qb_new has NaNs!" << endl;
+                cerr << name() << "::doGBP:  Qb_new has NaNs!" << endl;
                 return 1.0;
             }
             /* TODO: WHAT IS THE PURPOSE OF THE FOLLOWING CODE?
@@ -360,7 +408,7 @@ Real HAK::doGBP() {
                 Qa_new ^= (1.0 / OR(alpha).c());
                 Qa_new.normalize();
                 if( Qa_new.hasNaNs() ) {
-                    cerr << Name << "::doGBP:  Qa_new has NaNs!" << endl;
+                    cerr << name() << "::doGBP:  Qa_new has NaNs!" << endl;
                     return 1.0;
                 }
                 /* TODO: WHAT IS THE PURPOSE OF THE FOLLOWING CODE?
@@ -390,7 +438,7 @@ Real HAK::doGBP() {
         }
 
         if( props.verbose >= 3 )
-            cerr << Name << "::doGBP:  maxdiff " << maxDiff << " after " << _iters+1 << " passes" << endl;
+            cerr << name() << "::doGBP:  maxdiff " << maxDiff << " after " << _iters+1 << " passes" << endl;
     }
 
     if( maxDiff > _maxdiff )
@@ -400,10 +448,10 @@ Real HAK::doGBP() {
         if( maxDiff > props.tol ) {
             if( props.verbose == 1 )
                 cerr << endl;
-            cerr << Name << "::doGBP:  WARNING: not converged within " << props.maxiter << " passes (" << toc() - tic << " seconds)...final maxdiff:" << maxDiff << endl;
+            cerr << name() << "::doGBP:  WARNING: not converged within " << props.maxiter << " passes (" << toc() - tic << " seconds)...final maxdiff:" << maxDiff << endl;
         } else {
             if( props.verbose >= 2 )
-                cerr << Name << "::doGBP:  ";
+                cerr << name() << "::doGBP:  ";
             cerr << "converged in " << _iters << " passes (" << toc() - tic << " seconds)." << endl;
         }
     }
@@ -421,7 +469,7 @@ Real HAK::doDoubleLoop() {
     double tic = toc();
 
     // Save original outer regions
-    vector<FRegion> org_ORs = ORs;
+    vector<FRegion> org_ORs = _ORs;
 
     // Save original inner counting numbers and set negative counting numbers to zero
     vector<Real> org_IR_cs( nrIRs(), 0.0 );
@@ -453,7 +501,7 @@ Real HAK::doDoubleLoop() {
     size_t outer_iter = 0;
     size_t total_iter = 0;
     Real maxDiff = INFINITY;
-    for( outer_iter = 0; outer_iter < outer_maxiter && maxDiff > outer_tol; outer_iter++ ) {
+    for( outer_iter = 0; outer_iter < outer_maxiter && maxDiff > outer_tol && (toc() - tic) < props.maxtime; outer_iter++ ) {
         // Calculate new outer regions
         for( size_t alpha = 0; alpha < nrORs(); alpha++ ) {
             OR(alpha) = org_ORs[alpha];
@@ -481,7 +529,7 @@ Real HAK::doDoubleLoop() {
         total_iter += Iterations();
 
         if( props.verbose >= 3 )
-            cerr << Name << "::doDoubleLoop:  maxdiff " << maxDiff << " after " << total_iter << " passes" << endl;
+            cerr << name() << "::doDoubleLoop:  maxdiff " << maxDiff << " after " << total_iter << " passes" << endl;
     }
 
     // restore _maxiter, _verbose and _maxdiff
@@ -494,7 +542,7 @@ Real HAK::doDoubleLoop() {
         _maxdiff = maxDiff;
 
     // Restore original outer regions
-    ORs = org_ORs;
+    _ORs = org_ORs;
 
     // Restore original inner counting numbers
     for( size_t beta = 0; beta < nrIRs(); ++beta )
@@ -504,10 +552,10 @@ Real HAK::doDoubleLoop() {
         if( maxDiff > props.tol ) {
             if( props.verbose == 1 )
                 cerr << endl;
-                cerr << Name << "::doDoubleLoop:  WARNING: not converged within " << outer_maxiter << " passes (" << toc() - tic << " seconds)...final maxdiff:" << maxDiff << endl;
+                cerr << name() << "::doDoubleLoop:  WARNING: not converged after " << total_iter << " passes (" << toc() - tic << " seconds)...final maxdiff:" << maxDiff << endl;
             } else {
                 if( props.verbose >= 3 )
-                    cerr << Name << "::doDoubleLoop:  ";
+                    cerr << name() << "::doDoubleLoop:  ";
                 cerr << "converged in " << total_iter << " passes (" << toc() - tic << " seconds)." << endl;
             }
         }

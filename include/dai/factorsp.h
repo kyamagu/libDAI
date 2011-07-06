@@ -73,10 +73,14 @@ class TFactorSp {
         TFactorSp( const Var &v ) : _vs(v), _p(v.states()) {}
 
         /// Constructs factor depending on variables in \a vars with uniform distribution
-        TFactorSp( const VarSet& vars ) : _vs(vars), _p(_vs.nrStates()) {}
+        TFactorSp( const VarSet& vars ) : _vs(vars), _p((size_t)_vs.nrStates()) {
+            DAI_ASSERT( _vs.nrStates() <= std::numeric_limits<std::size_t>::max() );
+        }
 
         /// Constructs factor depending on variables in \a vars with all values set to \a p
-        TFactorSp( const VarSet& vars, T p ) : _vs(vars), _p(_vs.nrStates(),p) {}
+        TFactorSp( const VarSet& vars, T p ) : _vs(vars), _p((size_t)_vs.nrStates(),p) {
+            DAI_ASSERT( _vs.nrStates() <= std::numeric_limits<std::size_t>::max() );
+        }
 
         /// Constructs factor depending on variables in \a vars, copying the values from a std::vector<>
         /** \tparam S Type of values of \a x
@@ -84,15 +88,18 @@ class TFactorSp {
          *  \param x Vector with values to be copied.
          */
         template<typename S>
-        TFactorSp( const VarSet& vars, const std::vector<S> &x ) : _vs(vars), _p(x.begin(), x.begin() + _vs.nrStates(), _vs.nrStates()) {
+        TFactorSp( const VarSet& vars, const std::vector<S> &x ) : _vs(vars), _p() {
             DAI_ASSERT( x.size() == vars.nrStates() );
+            _p = TProbSp<T,spvector_type>( x.begin(), x.end(), x.size() );
         }
 
         /// Constructs factor depending on variables in \a vars, copying the values from an array
         /** \param vars contains the variables that the new factor should depend on.
          *  \param p Points to array of values to be added.
          */
-        TFactorSp( const VarSet& vars, const T* p ) : _vs(vars), _p(p, p + _vs.nrStates(), _vs.nrStates()) {}
+        TFactorSp( const VarSet& vars, const T* p ) : _vs(vars), _p(p, p + (size_t)_vs.nrStates(), (size_t)_vs.nrStates()) {
+            DAI_ASSERT( _vs.nrStates() <= std::numeric_limits<std::size_t>::max() );
+        }
 
         /// Constructs factor depending on variables in \a vars, copying the values from \a p
         TFactorSp( const VarSet& vars, const TProbSp<T,spvector_type> &p ) : _vs(vars), _p(p) {
@@ -141,12 +148,6 @@ class TFactorSp {
         /** \note This is equal to the length of the value vector.
          */
         size_t nrStates() const { return _p.size(); }
-
-        /// Returns the number of possible joint states of the variables on which the factor depends, \f$\prod_{l\in L} S_l\f$
-        /** \note This is equal to the length of the value vector.
-         *  \deprecated Please use dai::TFactorSp::nrStates() instead.
-         */
-        size_t states() const { return _p.size(); }
 
         /// Returns the Shannon entropy of \c *this, \f$-\sum_i p_i \log p_i\f$
         T entropy() const { return _p.entropy(); }
@@ -539,6 +540,8 @@ template<typename T, typename spvector_type> TFactorSp<T,spvector_type> TFactorS
 
 template<typename T, typename spvector_type> TFactorSp<T,spvector_type> TFactorSp<T,spvector_type>::marginal(const VarSet &vars, bool normed) const {
     VarSet res_vars = vars & _vs;
+
+    DAI_ASSERT( !isnan(p().def()) );
 
     VarSet rem(_vs / res_vars);
     TFactorSp<T,spvector_type> result( res_vars, rem.nrStates() * p().def() );

@@ -8,9 +8,6 @@
  */
 
 
-#define BOOST_TEST_DYN_LINK
-
-
 #include <dai/bipgraph.h>
 #include <vector>
 #include <strstream>
@@ -27,8 +24,6 @@ using namespace dai;
 
 BOOST_AUTO_TEST_CASE( ConstructorsTest ) {
     // check constructors
-    typedef BipartiteGraph::Edge Edge;
-
     BipartiteGraph G;
     BOOST_CHECK_EQUAL( G.nrNodes1(), 0 );
     BOOST_CHECK_EQUAL( G.nrNodes2(), 0 );
@@ -36,6 +31,15 @@ BOOST_AUTO_TEST_CASE( ConstructorsTest ) {
     BOOST_CHECK( G.isConnected() );
     BOOST_CHECK( G.isTree() );
     G.checkConsistency();
+
+    BipartiteGraph G1( 2, 3 );
+    BOOST_CHECK_EQUAL( G1.nrNodes1(), 2 );
+    BOOST_CHECK_EQUAL( G1.nrNodes2(), 3 );
+    BOOST_CHECK_EQUAL( G1.nrEdges(), 0 );
+    BOOST_CHECK( !G1.isConnected() );
+    BOOST_CHECK( !G1.isTree() );
+    BOOST_CHECK( !(G1 == G) );
+    G1.checkConsistency();
 
     std::vector<Edge> edges;
     edges.push_back( Edge(0, 0) );
@@ -49,6 +53,8 @@ BOOST_AUTO_TEST_CASE( ConstructorsTest ) {
     BOOST_CHECK_EQUAL( G2.nrEdges(), 4 );
     BOOST_CHECK( G2.isConnected() );
     BOOST_CHECK( G2.isTree() );
+    BOOST_CHECK( !(G2 == G) );
+    BOOST_CHECK( !(G2 == G1) );
     G2.checkConsistency();
 
     edges.push_back( Edge(1, 0) );
@@ -58,6 +64,9 @@ BOOST_AUTO_TEST_CASE( ConstructorsTest ) {
     BOOST_CHECK_EQUAL( G3.nrEdges(), 5 );
     BOOST_CHECK( G3.isConnected() );
     BOOST_CHECK( !G3.isTree() );
+    BOOST_CHECK( !(G3 == G) );
+    BOOST_CHECK( !(G3 == G1) );
+    BOOST_CHECK( !(G3 == G2) );
     G3.checkConsistency();
 
     BipartiteGraph G4( 3, 3, edges.begin(), edges.end() );
@@ -66,6 +75,10 @@ BOOST_AUTO_TEST_CASE( ConstructorsTest ) {
     BOOST_CHECK_EQUAL( G4.nrEdges(), 5 );
     BOOST_CHECK( !G4.isConnected() );
     BOOST_CHECK( !G4.isTree() );
+    BOOST_CHECK( !(G4 == G) );
+    BOOST_CHECK( !(G4 == G1) );
+    BOOST_CHECK( !(G4 == G2) );
+    BOOST_CHECK( !(G4 == G3) );
     G4.checkConsistency();
 
     G.construct( 3, 3, edges.begin(), edges.end() );
@@ -74,13 +87,22 @@ BOOST_AUTO_TEST_CASE( ConstructorsTest ) {
     BOOST_CHECK_EQUAL( G.nrEdges(), 5 );
     BOOST_CHECK( !G.isConnected() );
     BOOST_CHECK( !G.isTree() );
+    BOOST_CHECK( !(G == G1) );
+    BOOST_CHECK( !(G == G2) );
+    BOOST_CHECK( !(G == G3) );
+    BOOST_CHECK( G == G4 );
     G.checkConsistency();
+    
+    BipartiteGraph G5( G4 );
+    BOOST_CHECK( G5 == G4 );
+
+    BipartiteGraph G6 = G4;
+    BOOST_CHECK( G6 == G4 );
 }
 
 
 BOOST_AUTO_TEST_CASE( NeighborTest ) {
     // check nb() accessor / mutator
-    typedef BipartiteGraph::Edge Edge;
     std::vector<Edge> edges;
     edges.push_back( Edge(0, 0) );
     edges.push_back( Edge(0, 1) );
@@ -116,12 +138,21 @@ BOOST_AUTO_TEST_CASE( NeighborTest ) {
     BOOST_CHECK_EQUAL( G.nb2(2,0).iter, 0 );
     BOOST_CHECK_EQUAL( G.nb2(2,0).node, 1 );
     BOOST_CHECK_EQUAL( G.nb2(2,0).dual, 1 );
+    BOOST_CHECK_EQUAL( G.nb1Set(0).size(), 2 );
+    BOOST_CHECK_EQUAL( G.nb1Set(1).size(), 2 );
+    BOOST_CHECK_EQUAL( G.nb2Set(0).size(), 1 );
+    BOOST_CHECK_EQUAL( G.nb2Set(1).size(), 2 );
+    BOOST_CHECK_EQUAL( G.nb2Set(2).size(), 1 );
+    BOOST_CHECK( G.nb1Set(0) == SmallSet<size_t>( 0, 1 ) );
+    BOOST_CHECK( G.nb1Set(1) == SmallSet<size_t>( 1, 2 ) );
+    BOOST_CHECK( G.nb2Set(0) == SmallSet<size_t>( 0 ) );
+    BOOST_CHECK( G.nb2Set(1) == SmallSet<size_t>( 0, 1 ) );
+    BOOST_CHECK( G.nb2Set(2) == SmallSet<size_t>( 1 ) );
 }
 
 
 BOOST_AUTO_TEST_CASE( AddEraseTest ) {
     // check addition and erasure of nodes and edges
-    typedef BipartiteGraph::Edge Edge;
     std::vector<Edge> edges;
     edges.push_back( Edge( 0, 0 ) );
     edges.push_back( Edge( 0, 1 ) );
@@ -312,7 +343,6 @@ BOOST_AUTO_TEST_CASE( RandomAddEraseTest ) {
 
 BOOST_AUTO_TEST_CASE( QueriesTest ) {
     // check queries which have not been tested in another test case
-    typedef BipartiteGraph::Edge Edge;
     std::vector<Edge> edges;
     edges.push_back( Edge( 0, 1 ) );
     edges.push_back( Edge( 1, 1 ) );
@@ -350,7 +380,6 @@ BOOST_AUTO_TEST_CASE( QueriesTest ) {
 
 BOOST_AUTO_TEST_CASE( StreamTest ) {
     // check printDot
-    typedef BipartiteGraph::Edge Edge;
     std::vector<Edge> edges;
     edges.push_back( Edge(0, 0) );
     edges.push_back( Edge(0, 1) );
@@ -359,33 +388,35 @@ BOOST_AUTO_TEST_CASE( StreamTest ) {
     BipartiteGraph G( 2, 3, edges.begin(), edges.end() );
 
     std::stringstream ss;
-    G.printDot( ss );
-
     std::string s;
-    std::getline( ss, s );
-    BOOST_CHECK_EQUAL( s, "graph G {" );
-    std::getline( ss, s );
-    BOOST_CHECK_EQUAL( s, "node[shape=circle,width=0.4,fixedsize=true];" );
-    std::getline( ss, s );
-    BOOST_CHECK_EQUAL( s, "\tx0;" );
-    std::getline( ss, s );
-    BOOST_CHECK_EQUAL( s, "\tx1;" );
-    std::getline( ss, s );
-    BOOST_CHECK_EQUAL( s, "node[shape=box,width=0.3,height=0.3,fixedsize=true];" );
-    std::getline( ss, s );
-    BOOST_CHECK_EQUAL( s, "\ty0;" );
-    std::getline( ss, s );
-    BOOST_CHECK_EQUAL( s, "\ty1;" );
-    std::getline( ss, s );
-    BOOST_CHECK_EQUAL( s, "\ty2;" );
-    std::getline( ss, s );
-    BOOST_CHECK_EQUAL( s, "\tx0 -- y0;" );
-    std::getline( ss, s );
-    BOOST_CHECK_EQUAL( s, "\tx0 -- y1;" );
-    std::getline( ss, s );
-    BOOST_CHECK_EQUAL( s, "\tx1 -- y1;" );
-    std::getline( ss, s );
-    BOOST_CHECK_EQUAL( s, "\tx1 -- y2;" );
-    std::getline( ss, s );
-    BOOST_CHECK_EQUAL( s, "}" );
+
+    G.printDot( ss );
+    std::getline( ss, s ); BOOST_CHECK_EQUAL( s, "graph BipartiteGraph {" );
+    std::getline( ss, s ); BOOST_CHECK_EQUAL( s, "node[shape=circle,width=0.4,fixedsize=true];" );
+    std::getline( ss, s ); BOOST_CHECK_EQUAL( s, "\tx0;" );
+    std::getline( ss, s ); BOOST_CHECK_EQUAL( s, "\tx1;" );
+    std::getline( ss, s ); BOOST_CHECK_EQUAL( s, "node[shape=box,width=0.3,height=0.3,fixedsize=true];" );
+    std::getline( ss, s ); BOOST_CHECK_EQUAL( s, "\ty0;" );
+    std::getline( ss, s ); BOOST_CHECK_EQUAL( s, "\ty1;" );
+    std::getline( ss, s ); BOOST_CHECK_EQUAL( s, "\ty2;" );
+    std::getline( ss, s ); BOOST_CHECK_EQUAL( s, "\tx0 -- y0;" );
+    std::getline( ss, s ); BOOST_CHECK_EQUAL( s, "\tx0 -- y1;" );
+    std::getline( ss, s ); BOOST_CHECK_EQUAL( s, "\tx1 -- y1;" );
+    std::getline( ss, s ); BOOST_CHECK_EQUAL( s, "\tx1 -- y2;" );
+    std::getline( ss, s ); BOOST_CHECK_EQUAL( s, "}" );
+
+    ss << G;
+    std::getline( ss, s ); BOOST_CHECK_EQUAL( s, "graph BipartiteGraph {" );
+    std::getline( ss, s ); BOOST_CHECK_EQUAL( s, "node[shape=circle,width=0.4,fixedsize=true];" );
+    std::getline( ss, s ); BOOST_CHECK_EQUAL( s, "\tx0;" );
+    std::getline( ss, s ); BOOST_CHECK_EQUAL( s, "\tx1;" );
+    std::getline( ss, s ); BOOST_CHECK_EQUAL( s, "node[shape=box,width=0.3,height=0.3,fixedsize=true];" );
+    std::getline( ss, s ); BOOST_CHECK_EQUAL( s, "\ty0;" );
+    std::getline( ss, s ); BOOST_CHECK_EQUAL( s, "\ty1;" );
+    std::getline( ss, s ); BOOST_CHECK_EQUAL( s, "\ty2;" );
+    std::getline( ss, s ); BOOST_CHECK_EQUAL( s, "\tx0 -- y0;" );
+    std::getline( ss, s ); BOOST_CHECK_EQUAL( s, "\tx0 -- y1;" );
+    std::getline( ss, s ); BOOST_CHECK_EQUAL( s, "\tx1 -- y1;" );
+    std::getline( ss, s ); BOOST_CHECK_EQUAL( s, "\tx1 -- y2;" );
+    std::getline( ss, s ); BOOST_CHECK_EQUAL( s, "}" );
 }

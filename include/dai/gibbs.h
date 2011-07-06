@@ -33,40 +33,49 @@ class Gibbs : public DAIAlgFG {
         typedef std::vector<size_t> _count_t;
         /// Type used to store the joint state of all variables
         typedef std::vector<size_t> _state_t;
-        /// Number of samples counted so far (excluding burn-in)
+        /// Number of samples counted so far (excluding burn-in periods)
         size_t _sample_count;
         /// State counts for each variable
         std::vector<_count_t> _var_counts;
         /// State counts for each factor
         std::vector<_count_t> _factor_counts;
+        /// Number of iterations done (including burn-in periods)
+        size_t _iters;
         /// Current joint state of all variables
         _state_t _state;
+        /// Joint state with maximum probability seen so far
+        _state_t _max_state;
+        /// Highest score so far
+        Real _max_score;
 
     public:
         /// Parameters for Gibbs
         struct Properties {
-            /// Total number of iterations
-            size_t iters;
+            /// Maximum number of iterations
+            size_t maxiter;
 
-            /// Number of "burn-in" iterations
+            /// Maximum time (in seconds)
+            double maxtime;
+
+            /// Number of iterations after which a random restart is made
+            size_t restart;
+
+            /// Number of "burn-in" iterations after each (re)start (for which no statistics are gathered)
             size_t burnin;
 
             /// Verbosity (amount of output sent to stderr)
             size_t verbose;
         } props;
 
-        /// Name of this inference algorithm
-        static const char *Name;
-
     public:
         /// Default constructor
-        Gibbs() : DAIAlgFG(), _sample_count(0), _var_counts(), _factor_counts(), _state() {}
+        Gibbs() : DAIAlgFG(), _sample_count(0), _var_counts(), _factor_counts(), _iters(0), _state(), _max_state(), _max_score(-INFINITY) {}
 
         /// Construct from FactorGraph \a fg and PropertySet \a opts
         /** \param fg Factor graph.
          *  \param opts Parameters @see Properties
          */
-        Gibbs( const FactorGraph &fg, const PropertySet &opts ) : DAIAlgFG(fg), _sample_count(0), _var_counts(), _factor_counts(), _state() {
+        Gibbs( const FactorGraph &fg, const PropertySet &opts ) : DAIAlgFG(fg), _sample_count(0), _var_counts(), _factor_counts(), _iters(0), _state(), _max_state(), _max_score(-INFINITY) {
             setProperties( opts );
             construct();
         }
@@ -75,18 +84,20 @@ class Gibbs : public DAIAlgFG {
     /// \name General InfAlg interface
     //@{
         virtual Gibbs* clone() const { return new Gibbs(*this); }
-        virtual std::string identify() const { return std::string(Name) + printProperties(); }
+        virtual std::string name() const { return "GIBBS"; }
         virtual Factor belief( const Var &v ) const { return beliefV( findVar( v ) ); }
         virtual Factor belief( const VarSet &vs ) const;
         virtual Factor beliefV( size_t i ) const;
         virtual Factor beliefF( size_t I ) const;
         virtual std::vector<Factor> beliefs() const;
         virtual Real logZ() const { DAI_THROW(NOT_IMPLEMENTED); return 0.0; }
+        std::vector<std::size_t> findMaximum() const { return _max_state; }
         virtual void init();
         virtual void init( const VarSet &/*ns*/ ) { init(); }
         virtual Real run();
         virtual Real maxDiff() const { DAI_THROW(NOT_IMPLEMENTED); return 0.0; }
-        virtual size_t Iterations() const { return props.iters; }
+        virtual size_t Iterations() const { return _iters; }
+        virtual void setMaxIter( size_t maxiter ) { props.maxiter = maxiter; }
         virtual void setProperties( const PropertySet &opts );
         virtual PropertySet getProperties() const;
         virtual std::string printProperties() const;
@@ -119,10 +130,10 @@ class Gibbs : public DAIAlgFG {
 };
 
 
-/// Runs Gibbs sampling for \a iters iterations (of which \a burnin for burn-in) on FactorGraph \a fg, and returns the resulting state
+/// Runs Gibbs sampling for \a maxiter iterations (of which \a burnin for burn-in) on FactorGraph \a fg, and returns the resulting state
 /** \relates Gibbs
  */
-std::vector<size_t> getGibbsState( const FactorGraph &fg, size_t iters );
+std::vector<size_t> getGibbsState( const FactorGraph &fg, size_t maxiter );
 
 
 } // end of namespace dai

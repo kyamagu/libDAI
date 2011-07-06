@@ -24,7 +24,11 @@
 #include <iostream>
 #include <boost/foreach.hpp>
 #include <boost/functional/hash.hpp>
+#include <boost/lexical_cast.hpp>
 #include <algorithm>
+#include <cerrno>
+
+#include <dai/exceptions.h>
 
 
 #if defined(WINDOWS)
@@ -61,9 +65,6 @@
 
 
 #ifdef WINDOWS
-    /// Returns true if argument is NAN (Not A Number)
-    bool isnan( double x );
-
     /// Returns inverse hyperbolic tangent of argument
     double atanh( double x );
 
@@ -81,6 +82,9 @@ namespace dai {
 /// Real number (alias for \c double, which could be changed to <tt>long double</tt> if necessary)
 typedef double Real;
 
+/// Returns true if argument is NAN (Not A Number)
+bool isnan( Real x );
+
 /// Returns logarithm of \a x
 inline Real log( Real x ) {
     return std::log(x);
@@ -94,6 +98,14 @@ inline Real log0( Real x ) {
 /// Returns exponent of \a x
 inline Real exp( Real x ) {
     return std::exp(x);
+}
+
+/// Returns \a to the power \a y
+inline Real pow( Real x, Real y ) {
+    errno = 0;
+    Real result = std::pow(x, y);
+    DAI_DEBASSERT( errno == 0 );
+    return result;
 }
 
 
@@ -130,6 +142,20 @@ int rnd_int( int min, int max );
 /// Returns a random integer in the half-open interval [0, \a n)
 inline int rnd( int n ) {
     return rnd_int( 0, n-1 );
+}
+
+
+/// Converts a variable of type \a T to a \c std::string by using a \c boost::lexical_cast
+template<class T>
+std::string toString( const T& x ) {
+    return boost::lexical_cast<std::string>(x);
+}
+
+
+/// Converts a variable of type std::string to \a T by using a \c boost::lexical_cast
+template<class T>
+T fromString( const std::string& x ) {
+    return boost::lexical_cast<T>(x);
 }
 
 
@@ -183,7 +209,12 @@ std::vector<T> concat( const std::vector<T>& u, const std::vector<T>& v ) {
 }
 
 /// Split a string into tokens delimited by one of the characters in \a delim
-void tokenizeString( const std::string& s, std::vector<std::string>& outTokens, const std::string& delim="\t\n" );
+/** \param s the string to be split into tokens
+ *  \param singleDelim if \c true, any single delimiter forms a boundary between two tokens; 
+ *         if \c false, a maximal group of consecutive delimiters forms a boundary between two tokens
+ *  \param delim delimiter characters
+ */
+std::vector<std::string> tokenizeString( const std::string& s, bool singleDelim, const std::string& delim="\t\n" );
 
 
 /// Enumerates different ways of normalizing a probability measure.

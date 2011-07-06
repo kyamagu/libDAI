@@ -51,6 +51,8 @@ BOOSTLIBS_UTF=-lboost_unit_test_framework
 CCLIB=-Llib -L/opt/local/lib
 
 # MATLAB
+# MatLab version 7.3 (R2006b) or newer?
+NEW_MATLAB=true
 # Replace the following by the directory where MatLab has been installed
 MATLABDIR=/agbs/share/sw/matlab
 # The following should resolve to the MatLab mex compile command
@@ -69,3 +71,11 @@ SWIG=swig
 INCLUDE_PYTHON=/usr/include/python2.5
 # Location of Boost C++ library header files
 INCLUDE_BOOST=/usr/include/boost
+
+# CIMG
+# CImg version 1.3.0 or newer?
+NEW_CIMG=true
+# Include directory for image segmentation example
+CIMGINC=
+# Libraries for image segmentation example
+CIMGLIBS=-lpthread -lX11

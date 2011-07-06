@@ -98,10 +98,10 @@ class JTree : public DAIAlgRG {
 
             /// Heuristic to use for constructing the junction tree
             HeuristicType heuristic;
-        } props;
 
-        /// Name of this inference algorithm
-        static const char *Name;
+            /// Maximum memory to use in bytes (0 means unlimited)
+            size_t maxmem;
+        } props;
 
     public:
     /// \name Constructors/destructors
@@ -110,10 +110,9 @@ class JTree : public DAIAlgRG {
         JTree() : DAIAlgRG(), _mes(), _logZ(), RTree(), Qa(), Qb(), props() {}
 
         /// Construct from FactorGraph \a fg and PropertySet \a opts
-        /** \param fg factor graph (which has to be connected);
+        /** \param fg factor graph
          ** \param opts Parameters @see Properties
          *  \param automatic if \c true, construct the junction tree automatically, using the heuristic in opts['heuristic'].
-         *  \throw FACTORGRAPH_NOT_CONNECTED if \a fg is not connected
          */
         JTree( const FactorGraph &fg, const PropertySet &opts, bool automatic=true );
     //@}
@@ -122,10 +121,13 @@ class JTree : public DAIAlgRG {
     /// \name General InfAlg interface
     //@{
         virtual JTree* clone() const { return new JTree(*this); }
-        virtual std::string identify() const;
+        virtual std::string name() const { return "JTREE"; }
         virtual Factor belief( const VarSet &vs ) const;
         virtual std::vector<Factor> beliefs() const;
         virtual Real logZ() const;
+        /** \pre Assumes that run() has been called and that \a props.inference == \c MAXPROD
+         */
+        std::vector<std::size_t> findMaximum() const;
         virtual void init() {}
         virtual void init( const VarSet &/*ns*/ ) {}
         virtual Real run();
@@ -146,19 +148,20 @@ class JTree : public DAIAlgRG {
          *  Subsequently, a corresponding region graph is built:
          *    - the outer regions correspond with the cliques and have counting number 1;
          *    - the inner regions correspond with the seperators, i.e., the intersections of two 
-         *      cliques that are neighbors in the spanning tree, and have counting number -1;
+         *      cliques that are neighbors in the spanning tree, and have counting number -1
+         *      (except empty ones, which have counting number 0);
          *    - inner and outer regions are connected by an edge if the inner region is a
          *      seperator for the outer region.
          *  Finally, Beliefs are constructed.
          *  If \a verify == \c true, checks whether each factor is subsumed by a clique.
          */
-        void construct( const std::vector<VarSet> &cl, bool verify=false );
+        void construct( const FactorGraph &fg, const std::vector<VarSet> &cl, bool verify=false );
 
         /// Constructs a junction tree based on the cliques \a cl (corresponding to some elimination sequence).
         /** Invokes construct() and then constructs messages.
          *  \see construct()
          */
-        void GenerateJT( const std::vector<VarSet> &cl );
+        void GenerateJT( const FactorGraph &fg, const std::vector<VarSet> &cl );
 
         /// Returns constant reference to the message from outer region \a alpha to its \a _beta 'th neighboring inner region
         const Factor & message( size_t alpha, size_t _beta ) const { return _mes[alpha][_beta]; }
@@ -189,20 +192,19 @@ class JTree : public DAIAlgRG {
         /** \pre assumes that run() has been called already
          */
         Factor calcMarginal( const VarSet& vs );
-
-        /// Calculates the joint state of all variables that has maximum probability
-        /** \pre Assumes that run() has been called and that \a props.inference == \c MAXPROD
-         */
-        std::vector<std::size_t> findMaximum() const;
     //@}
 };
 
 
 /// Calculates upper bound to the treewidth of a FactorGraph, using the specified heuristic
 /** \relates JTree
+ *  \param fg the factor graph for which the treewidth should be bounded
+ *  \param fn the heuristic cost function used for greedy variable elimination
+ *  \param maxStates maximum total number of states in outer regions of junction tree (0 means no limit)
+ *  \throws OUT_OF_MEMORY if the total number of states becomes larger than maxStates
  *  \return a pair (number of variables in largest clique, number of states in largest clique)
  */
-std::pair<size_t,double> boundTreewidth( const FactorGraph &fg, greedyVariableElimination::eliminationCostFunction fn );
+std::pair<size_t,long double> boundTreewidth( const FactorGraph &fg, greedyVariableElimination::eliminationCostFunction fn, size_t maxStates=0 );
 
 
 } // end of namespace dai

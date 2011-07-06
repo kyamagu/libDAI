@@ -21,10 +21,6 @@ namespace dai {
 using namespace std;
 
 
-/// Convenience typedef
-typedef BipartiteGraph::Neighbor Neighbor;
-
-
 /// Returns the entry of the I'th factor corresponding to a global state
 size_t getFactorEntryForState( const FactorGraph &fg, size_t I, const vector<size_t> &state ) {
     size_t f_entry = 0;
@@ -1014,7 +1010,8 @@ Real numericBBPTest( const InfAlg &bp, const std::vector<size_t> *state, const P
                 psi_1_prb.set( xi, psi_1_prb[xi] + h );
 //                 psi_1_prb.normalize();
                 size_t I = bp_prb->fg().nbV(i)[0]; // use first factor in list of neighbors of i
-                bp_prb->fg().factor(I) *= Factor( bp_prb->fg().var(i), psi_1_prb );
+                Factor tmp = bp_prb->fg().factor(I) * Factor( bp_prb->fg().var(i), psi_1_prb );
+                bp_prb->fg().setFactor( I, tmp );
 
                 // call 'init' on the perturbed variables
                 bp_prb->init( bp_prb->fg().var(i) );
@@ -1152,8 +1149,6 @@ void BBP::Properties::set(const PropertySet &opts)
     }
     if( !errormsg.empty() )
         DAI_THROWE(UNKNOWN_PROPERTY, errormsg);
-    if( !opts.hasKey("verbose") )
-        errormsg = errormsg + "BBP: Missing property \"verbose\" for method \"BBP\"\n";
     if( !opts.hasKey("maxiter") )
         errormsg = errormsg + "BBP: Missing property \"maxiter\" for method \"BBP\"\n";
     if( !opts.hasKey("tol") )
@@ -1164,7 +1159,11 @@ void BBP::Properties::set(const PropertySet &opts)
         errormsg = errormsg + "BBP: Missing property \"updates\" for method \"BBP\"\n";
     if( !errormsg.empty() )
         DAI_THROWE(NOT_ALL_PROPERTIES_SPECIFIED,errormsg);
-    verbose = opts.getStringAs<size_t>("verbose");
+    if( opts.hasKey("verbose") ) {
+        verbose = opts.getStringAs<size_t>("verbose");
+    } else {
+        verbose = 0;
+    }
     maxiter = opts.getStringAs<size_t>("maxiter");
     tol = opts.getStringAs<Real>("tol");
     damping = opts.getStringAs<Real>("damping");

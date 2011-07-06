@@ -76,10 +76,14 @@ class TFactor {
         TFactor( const Var &v ) : _vs(v), _p(v.states()) {}
 
         /// Constructs factor depending on variables in \a vars with uniform distribution
-        TFactor( const VarSet& vars ) : _vs(vars), _p(_vs.nrStates()) {}
+        TFactor( const VarSet& vars ) : _vs(vars), _p((size_t)_vs.nrStates()) {
+            DAI_ASSERT( _vs.nrStates() <= std::numeric_limits<std::size_t>::max() );
+        }
 
         /// Constructs factor depending on variables in \a vars with all values set to \a p
-        TFactor( const VarSet& vars, T p ) : _vs(vars), _p(_vs.nrStates(),p) {}
+        TFactor( const VarSet& vars, T p ) : _vs(vars), _p((size_t)_vs.nrStates(),p) {
+            DAI_ASSERT( _vs.nrStates() <= std::numeric_limits<std::size_t>::max() );
+        }
 
         /// Constructs factor depending on variables in \a vars, copying the values from a std::vector<>
         /** \tparam S Type of values of \a x
@@ -87,15 +91,18 @@ class TFactor {
          *  \param x Vector with values to be copied.
          */
         template<typename S>
-        TFactor( const VarSet& vars, const std::vector<S> &x ) : _vs(vars), _p(x.begin(), x.begin() + _vs.nrStates(), _vs.nrStates()) {
+        TFactor( const VarSet& vars, const std::vector<S> &x ) : _vs(vars), _p() {
             DAI_ASSERT( x.size() == vars.nrStates() );
+            _p = TProb<T>( x.begin(), x.end(), x.size() );
         }
 
         /// Constructs factor depending on variables in \a vars, copying the values from an array
         /** \param vars contains the variables that the new factor should depend on.
          *  \param p Points to array of values to be added.
          */
-        TFactor( const VarSet& vars, const T* p ) : _vs(vars), _p(p, p + _vs.nrStates(), _vs.nrStates()) {}
+        TFactor( const VarSet& vars, const T* p ) : _vs(vars), _p(p, p + (size_t)_vs.nrStates(), (size_t)_vs.nrStates()) {
+            DAI_ASSERT( _vs.nrStates() <= std::numeric_limits<std::size_t>::max() );
+        }
 
         /// Constructs factor depending on variables in \a vars, copying the values from \a p
         TFactor( const VarSet& vars, const TProb<T> &p ) : _vs(vars), _p(p) {
@@ -144,12 +151,6 @@ class TFactor {
         /** \note This is equal to the length of the value vector.
          */
         size_t nrStates() const { return _p.size(); }
-
-        /// Returns the number of possible joint states of the variables on which the factor depends, \f$\prod_{l\in L} S_l\f$
-        /** \note This is equal to the length of the value vector.
-         *  \deprecated Please use dai::TFactor::nrStates() instead.
-         */
-        size_t states() const { return _p.size(); }
 
         /// Returns the Shannon entropy of \c *this, \f$-\sum_i p_i \log p_i\f$
         T entropy() const { return _p.entropy(); }
@@ -350,7 +351,8 @@ class TFactor {
             else {
                 TFactor<T> f(*this); // make a copy
                 _vs |= g._vs;
-                size_t N = _vs.nrStates();
+                DAI_ASSERT( _vs.nrStates() < std::numeric_limits<std::size_t>::max() );
+                size_t N = (size_t)_vs.nrStates();
 
                 IndexFor i_f( f._vs, _vs );
                 IndexFor i_g( g._vs, _vs );
@@ -408,7 +410,8 @@ class TFactor {
                 result._p = _p.pwBinaryTr( g._p, op );
             } else {
                 result._vs = _vs | g._vs;
-                size_t N = result._vs.nrStates();
+                DAI_ASSERT( result._vs.nrStates() < std::numeric_limits<std::size_t>::max() );
+                size_t N = (size_t)result._vs.nrStates();
 
                 IndexFor i_f( _vs, result.vars() );
                 IndexFor i_g( g._vs, result.vars() );
@@ -683,6 +686,13 @@ Factor createFactorPotts( const Var &x1, const Var &x2, Real J );
  *  \param state The state of \a v that should get value 1
  */
 Factor createFactorDelta( const Var &v, size_t state );
+
+
+/// Returns a Kronecker delta point mass
+/** \param vs Set of variables
+ *  \param state The state of \a vs that should get value 1
+ */
+Factor createFactorDelta( const VarSet& vs, size_t state );
 
 
 } // end of namespace dai

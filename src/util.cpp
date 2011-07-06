@@ -10,10 +10,7 @@
 
 
 #include <dai/util.h>
-#include <boost/random/linear_congruential.hpp>
-#include <boost/random/uniform_real.hpp>
-#include <boost/random/normal_distribution.hpp>
-#include <boost/random/variate_generator.hpp>
+#include <boost/random.hpp>
 
 #ifdef WINDOWS
     #include <windows.h>
@@ -26,16 +23,7 @@
 #endif
 
 
-#ifdef CYGWIN
-bool isnan( double x ) {
-    return __isnand( x );  // isnan() is a macro in Cygwin (as required by C99)
-}
-#endif
-
 #ifdef WINDOWS
-bool isnan( double x ) {
-    return _isnan( x );
-}
 double atanh( double x ) {
     return boost::math::atanh( x );
 }
@@ -47,6 +35,19 @@ double log1p( double x ) {
 
 namespace dai {
 
+#if defined CYGWIN
+bool isnan( Real x ) {
+    return __isnand( x );  // isnan() is a macro in Cygwin (as required by C99)
+}
+#elif defined WINDOWS
+bool isnan( Real x ) {
+    return _isnan( x );
+}
+#else
+bool isnan( Real x ) {
+    return std::isnan( x );
+}
+#endif
 
 // Returns user+system time in seconds
 double toc() {
@@ -63,7 +64,7 @@ double toc() {
 }
 
 /// Type of global random number generator
-typedef boost::minstd_rand _rnd_gen_type;  // Try boost::mt19937 or boost::ecuyer1988 instead of boost::minstd_rand
+typedef boost::mt19937 _rnd_gen_type;
 
 /// Global random number generator
 _rnd_gen_type _rnd_gen(42U);
@@ -82,7 +83,7 @@ boost::variate_generator<_rnd_gen_type&, boost::normal_distribution<Real> > _nor
 
 
 void rnd_seed( size_t seed ) {
-    _rnd_gen.seed(seed);
+    _rnd_gen.seed( static_cast<unsigned int>(seed) );
     _normal_rnd.distribution().reset(); // needed for clearing the cache used in boost::normal_distribution
 }
 
@@ -98,15 +99,29 @@ int rnd_int( int min, int max ) {
     return (int)floor(_uni_rnd() * (max + 1 - min) + min);
 }
 
-void tokenizeString(const std::string& s, std::vector<std::string>& outTokens, const std::string& delim) {
-    size_t start = 0;
-    while (start < s.size()) {
-        size_t end = s.find_first_of(delim, start);
-        if (end > s.size())
+std::vector<std::string> tokenizeString( const std::string& s, bool singleDelim, const std::string& delim ) {
+    using namespace std;
+    vector<string> tokens;
+
+    string::size_type start = 0;
+    while( start <= s.size() ) {
+        string::size_type end = s.find_first_of( delim, start );
+        if( end == string::npos )
             end = s.size();
-        outTokens.push_back(s.substr(start, end - start));
-        start = end + 1;
+
+        if( end == start && !singleDelim ) {
+            // skip to next non-delimiter
+            start = s.find_first_not_of( delim, start );
+            if( start == string::npos )
+                break;
+        } else { // we found a token
+            tokens.push_back( s.substr(start, end - start) );
+            start = end + 1;
+        }
     }
+
+    return tokens;
 }
+
 
 } // end of namespace dai

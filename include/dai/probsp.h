@@ -70,7 +70,6 @@ class TProbSp {
          *  \param sizeHint For efficiency, the number of entries can be speficied by \a sizeHint;
          *    the value 0 can be given if the size is unknown, but this will result in a performance penalty.
          *  \param def Default value to use for the constructed sparse vector.
-         *  \note In libDAI versions 0.2.4 and earlier, the \a sizeHint argument was optional.
          */
         template <typename TIterator>
         TProbSp( TIterator begin, TIterator end, size_t sizeHint, T def=0 ) : _p( begin, end, sizeHint, def ) {}
@@ -316,6 +315,8 @@ class TProbSp {
 
         /// Comparison
         bool operator==( const this_type& q ) const {
+            if( size() != q.size() )
+                return false;
             return _p == q._p; 
         }
     //@}
@@ -367,11 +368,11 @@ class TProbSp {
         /// Returns normalized copy of \c *this, using the specified norm
         /** \throw NOT_NORMALIZABLE if the norm is zero
          */
-        this_type normalized( ProbNormType norm = NORMPROB ) const {
+        this_type normalized( ProbNormType norm = dai::NORMPROB ) const {
             T Z = 0;
-            if( norm == NORMPROB )
+            if( norm == dai::NORMPROB )
                 Z = sum();
-            else if( norm == NORMLINF )
+            else if( norm == dai::NORMLINF )
                 Z = maxAbs();
             if( Z == (T)0 ) {
                 DAI_THROW(NOT_NORMALIZABLE);
@@ -431,11 +432,11 @@ class TProbSp {
         /// Normalizes vector using the specified norm
         /** \throw NOT_NORMALIZABLE if the norm is zero
          */
-        T normalize( ProbNormType norm=NORMPROB ) {
+        T normalize( ProbNormType norm = dai::NORMPROB ) {
             T Z = 0;
-            if( norm == NORMPROB )
+            if( norm == dai::NORMPROB )
                 Z = sum();
-            else if( norm == NORMLINF )
+            else if( norm == dai::NORMLINF )
                 Z = maxAbs();
             if( Z == (T)0 )
                 DAI_THROW(NOT_NORMALIZABLE);

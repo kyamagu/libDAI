@@ -75,15 +75,16 @@ int main( int argc, char *argv[] ) {
     if( argc != 3 ) {
         // Display help message if number of command line arguments is incorrect
         cout << "This program is part of libDAI - http://www.libdai.org/" << endl << endl;
-        cout << "Usage: ./fginfo <in.fg> <tw>" << endl << endl;
+        cout << "Usage: ./fginfo <in.fg> <maxstates>" << endl << endl;
         cout << "Reports some detailed information about the factor graph <in.fg>." << endl;
-        cout << "Also calculates treewidth (which may take some time) unless <tw> == 0." << endl;
+        cout << "Also calculates treewidth, with maximum total number of states" << endl;
+        cout << "given by <maxstates>, where 0 means unlimited." << endl << endl;
         return 1;
     } else {
         // Read factorgraph
         FactorGraph fg;
         char *infile = argv[1];
-        int calc_tw = atoi(argv[2]);
+        size_t maxstates = fromString<size_t>( argv[2] );
         fg.ReadFromFile( infile );
 
         // Output various statistics
@@ -95,18 +96,53 @@ int main( int argc, char *argv[] ) {
         cout << "Has negatives:         " << hasNegatives(fg.factors()) << endl;
         cout << "Binary variables?      " << fg.isBinary() << endl;
         cout << "Pairwise interactions? " << fg.isPairwise() << endl;
-        // Calculate treewidth using various heuristics, if requested
-        if( calc_tw ) {
-            std::pair<size_t,double> tw;
-            tw = boundTreewidth(fg, &eliminationCost_MinNeighbors);
-            cout << "Treewidth (MinNeighbors):     " << tw.first << " (" << tw.second << " states)" << endl;
-            tw = boundTreewidth(fg, &eliminationCost_MinWeight);
-            cout << "Treewidth (MinWeight):        " << tw.first << " (" << tw.second << " states)" << endl;
-            tw = boundTreewidth(fg, &eliminationCost_MinFill);
-            cout << "Treewidth (MinFill):          " << tw.first << " (" << tw.second << " states)" << endl;
-            tw = boundTreewidth(fg, &eliminationCost_WeightedMinFill);
-            cout << "Treewidth (WeightedMinFill):  " << tw.first << " (" << tw.second << " states)" << endl;
+        
+        // Calculate treewidth using various heuristics
+        std::pair<size_t,double> tw;
+        cout << "Treewidth (MinNeighbors):     ";
+        try {
+            tw = boundTreewidth(fg, &eliminationCost_MinNeighbors, maxstates );
+            cout << tw.first << " (" << tw.second << " states)" << endl;
+        } catch( Exception &e ) {
+            if( e.code() == Exception::OUT_OF_MEMORY )
+                cout << "> " << maxstates << endl;
+            else
+                cout << "an exception occurred" << endl;
         }
+        
+        cout << "Treewidth (MinWeight):        ";
+        try {
+            tw = boundTreewidth(fg, &eliminationCost_MinWeight, maxstates );
+            cout << tw.first << " (" << tw.second << " states)" << endl;
+        } catch( Exception &e ) {
+            if( e.code() == Exception::OUT_OF_MEMORY )
+                cout << "> " << maxstates << endl;
+            else
+                cout << "an exception occurred" << endl;
+        }
+        
+        cout << "Treewidth (MinFill):          ";
+        try {
+            tw = boundTreewidth(fg, &eliminationCost_MinFill, maxstates );
+            cout << tw.first << " (" << tw.second << " states)" << endl;
+        } catch( Exception &e ) {
+            if( e.code() == Exception::OUT_OF_MEMORY )
+                cout << "> " << maxstates << endl;
+            else
+                cout << "an exception occurred" << endl;
+        }
+
+        cout << "Treewidth (WeightedMinFill):  ";
+        try {
+            tw = boundTreewidth(fg, &eliminationCost_WeightedMinFill, maxstates );
+            cout << tw.first << " (" << tw.second << " states)" << endl;
+        } catch( Exception &e ) {
+            if( e.code() == Exception::OUT_OF_MEMORY )
+                cout << "> " << maxstates << endl;
+            else
+                cout << "an exception occurred" << endl;
+        }
+        
         // Calculate total state space
         long double stsp = 1.0;
         for( size_t i = 0; i < fg.nrVars(); i++ )
@@ -118,7 +154,7 @@ int main( int argc, char *argv[] ) {
         // Calculate complexity for LCBP
         long double cavsum_lcbp = 0.0;
         long double cavsum_lcbp2 = 0.0;
-        size_t max_Delta_size = 0;
+        long double max_Delta_size = 0.0;
         map<size_t,size_t> cavsizes;
         for( size_t i = 0; i < fg.nrVars(); i++ ) {
             VarSet di = fg.delta(i);
@@ -126,7 +162,7 @@ int main( int argc, char *argv[] ) {
                 cavsizes[di.size()]++;
             else
                 cavsizes[di.size()] = 1;
-            size_t Ds = fg.Delta(i).nrStates();
+            long double Ds = fg.Delta(i).nrStates();
             if( Ds > max_Delta_size )
                 max_Delta_size = Ds;
             cavsum_lcbp += di.nrStates();

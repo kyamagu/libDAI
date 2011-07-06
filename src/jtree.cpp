@@ -20,15 +20,14 @@ namespace dai {
 using namespace std;
 
 
-const char *JTree::Name = "JTREE";
-
-
 void JTree::setProperties( const PropertySet &opts ) {
-    DAI_ASSERT( opts.hasKey("verbose") );
     DAI_ASSERT( opts.hasKey("updates") );
 
-    props.verbose = opts.getStringAs<size_t>("verbose");
     props.updates = opts.getStringAs<Properties::UpdateType>("updates");
+    if( opts.hasKey("verbose") )
+        props.verbose = opts.getStringAs<size_t>("verbose");
+    else
+        props.verbose = 0;
     if( opts.hasKey("inference") )
         props.inference = opts.getStringAs<Properties::InfType>("inference");
     else
@@ -37,6 +36,10 @@ void JTree::setProperties( const PropertySet &opts ) {
         props.heuristic = opts.getStringAs<Properties::HeuristicType>("heuristic");
     else
         props.heuristic = Properties::HeuristicType::MINFILL;
+    if( opts.hasKey("maxmem") )
+        props.maxmem = opts.getStringAs<size_t>("maxmem");
+    else
+        props.maxmem = 0;
 }
 
 
@@ -46,6 +49,7 @@ PropertySet JTree::getProperties() const {
     opts.set( "updates", props.updates );
     opts.set( "inference", props.inference );
     opts.set( "heuristic", props.heuristic );
+    opts.set( "maxmem", props.maxmem );
     return opts;
 }
 
@@ -56,32 +60,20 @@ string JTree::printProperties() const {
     s << "verbose=" << props.verbose << ",";
     s << "updates=" << props.updates << ",";
     s << "heuristic=" << props.heuristic << ",";
-    s << "inference=" << props.inference << "]";
+    s << "inference=" << props.inference << ",";
+    s << "maxmem=" << props.maxmem << "]";
     return s.str();
 }
 
 
-JTree::JTree( const FactorGraph &fg, const PropertySet &opts, bool automatic ) : DAIAlgRG(fg), _mes(), _logZ(), RTree(), Qa(), Qb(), props() {
+JTree::JTree( const FactorGraph &fg, const PropertySet &opts, bool automatic ) : DAIAlgRG(), _mes(), _logZ(), RTree(), Qa(), Qb(), props() {
     setProperties( opts );
 
-    if( !isConnected() )
-       DAI_THROW(FACTORGRAPH_NOT_CONNECTED);
-
     if( automatic ) {
-        // Create ClusterGraph which contains factors as clusters
-        vector<VarSet> cl;
-        cl.reserve( fg.nrFactors() );
-        for( size_t I = 0; I < nrFactors(); I++ )
-            cl.push_back( factor(I).vars() );
-        ClusterGraph _cg( cl );
-
+        // Create ClusterGraph which contains maximal factors as clusters
+        ClusterGraph _cg( fg, true );
         if( props.verbose >= 3 )
             cerr << "Initial clusters: " << _cg << endl;
-
-        // Retain only maximal clusters
-        _cg.eraseNonMaximal();
-        if( props.verbose >= 3 )
-            cerr << "Maximal clusters: " << _cg << endl;
 
         // Use heuristic to guess optimal elimination sequence
         greedyVariableElimination::eliminationCostFunction ec(NULL);
@@ -101,68 +93,99 @@ JTree::JTree( const FactorGraph &fg, const PropertySet &opts, bool automatic ) :
             default:
                 DAI_THROW(UNKNOWN_ENUM_VALUE);
         }
-        vector<VarSet> ElimVec = _cg.VarElim( greedyVariableElimination( ec ) ).eraseNonMaximal().toVector();
+        size_t fudge = 6; // this yields a rough estimate of the memory needed (for some reason not yet clearly understood)
+        vector<VarSet> ElimVec = _cg.VarElim( greedyVariableElimination( ec ), props.maxmem / (sizeof(Real) * fudge) ).eraseNonMaximal().clusters();
         if( props.verbose >= 3 )
             cerr << "VarElim result: " << ElimVec << endl;
 
+        // Estimate memory needed (rough upper bound)
+        long double memneeded = 0;
+        foreach( const VarSet& cl, ElimVec )
+            memneeded += cl.nrStates();
+        memneeded *= sizeof(Real) * fudge;
+        if( props.verbose >= 1 ) {
+            cerr << "Estimate of needed memory: " << memneeded / 1024 << "kB" << endl;
+            cerr << "Maximum memory: ";
+            if( props.maxmem )
+               cerr << props.maxmem / 1024 << "kB" << endl;
+            else
+               cerr << "unlimited" << endl;
+        }
+        if( props.maxmem && memneeded > props.maxmem )
+            DAI_THROW(OUT_OF_MEMORY);
+
         // Generate the junction tree corresponding to the elimination sequence
-        GenerateJT( ElimVec );
+        GenerateJT( fg, ElimVec );
     }
 }
 
 
-void JTree::construct( const std::vector<VarSet> &cl, bool verify ) {
+void JTree::construct( const FactorGraph &fg, const std::vector<VarSet> &cl, bool verify ) {
+    // Copy the factor graph
+    FactorGraph::operator=( fg );
+
     // Construct a weighted graph (each edge is weighted with the cardinality
     // of the intersection of the nodes, where the nodes are the elements of cl).
     WeightedGraph<int> JuncGraph;
-    for( size_t i = 0; i < cl.size(); i++ )
-        for( size_t j = i+1; j < cl.size(); j++ ) {
+    // Start by connecting all clusters with cluster zero, and weight zero,
+    // in order to get a connected weighted graph
+    for( size_t i = 1; i < cl.size(); i++ )
+        JuncGraph[UEdge(i,0)] = 0;
+    for( size_t i = 0; i < cl.size(); i++ ) {
+        for( size_t j = i + 1; j < cl.size(); j++ ) {
             size_t w = (cl[i] & cl[j]).size();
             if( w )
                 JuncGraph[UEdge(i,j)] = w;
         }
+    }
+    if( props.verbose >= 3 )
+        cerr << "Weightedgraph: " << JuncGraph << endl;
 
     // Construct maximal spanning tree using Prim's algorithm
     RTree = MaxSpanningTree( JuncGraph, true );
+    if( props.verbose >= 3 )
+        cerr << "Spanning tree: " << RTree << endl;
+    DAI_DEBASSERT( RTree.size() == cl.size() - 1 );
 
     // Construct corresponding region graph
 
     // Create outer regions
-    ORs.clear();
-    ORs.reserve( cl.size() );
+    _ORs.clear();
+    _ORs.reserve( cl.size() );
     for( size_t i = 0; i < cl.size(); i++ )
-        ORs.push_back( FRegion( Factor(cl[i], 1.0), 1.0 ) );
+        _ORs.push_back( FRegion( Factor(cl[i], 1.0), 1.0 ) );
 
     // For each factor, find an outer region that subsumes that factor.
     // Then, multiply the outer region with that factor.
-    fac2OR.clear();
-    fac2OR.resize( nrFactors(), -1U );
+    _fac2OR.clear();
+    _fac2OR.resize( nrFactors(), -1U );
     for( size_t I = 0; I < nrFactors(); I++ ) {
         size_t alpha;
         for( alpha = 0; alpha < nrORs(); alpha++ )
             if( OR(alpha).vars() >> factor(I).vars() ) {
-                fac2OR[I] = alpha;
+                _fac2OR[I] = alpha;
                 break;
             }
         if( verify )
             DAI_ASSERT( alpha != nrORs() );
     }
-    RecomputeORs();
+    recomputeORs();
 
     // Create inner regions and edges
-    IRs.clear();
-    IRs.reserve( RTree.size() );
+    _IRs.clear();
+    _IRs.reserve( RTree.size() );
     vector<Edge> edges;
     edges.reserve( 2 * RTree.size() );
     for( size_t i = 0; i < RTree.size(); i++ ) {
         edges.push_back( Edge( RTree[i].first, nrIRs() ) );
         edges.push_back( Edge( RTree[i].second, nrIRs() ) );
-        // inner clusters have counting number -1
-        IRs.push_back( Region( cl[RTree[i].first] & cl[RTree[i].second], -1.0 ) );
+        // inner clusters have counting number -1, except if they are empty
+        VarSet intersection = cl[RTree[i].first] & cl[RTree[i].second];
+        _IRs.push_back( Region( intersection, intersection.size() ? -1.0 : 0.0 ) );
     }
 
     // create bipartite graph
-    G.construct( nrORs(), nrIRs(), edges.begin(), edges.end() );
+    _G.construct( nrORs(), nrIRs(), edges.begin(), edges.end() );
 
     // Check counting numbers
 #ifdef DAI_DEBUG
@@ -182,8 +205,8 @@ void JTree::construct( const std::vector<VarSet> &cl, bool verify ) {
 }
 
 
-void JTree::GenerateJT( const std::vector<VarSet> &cl ) {
-    construct( cl, true );
+void JTree::GenerateJT( const FactorGraph &fg, const std::vector<VarSet> &cl ) {
+    construct( fg, cl, true );
 
     // Create messages
     _mes.clear();
@@ -200,19 +223,17 @@ void JTree::GenerateJT( const std::vector<VarSet> &cl ) {
 }
 
 
-string JTree::identify() const {
-    return string(Name) + printProperties();
-}
-
-
 Factor JTree::belief( const VarSet &vs ) const {
     vector<Factor>::const_iterator beta;
     for( beta = Qb.begin(); beta != Qb.end(); beta++ )
         if( beta->vars() >> vs )
             break;
-    if( beta != Qb.end() )
-        return( beta->marginal(vs) );
-    else {
+    if( beta != Qb.end() ) {
+        if( props.inference == Properties::InfType::SUMPROD )
+            return( beta->marginal(vs) );
+        else
+            return( beta->maxMarginal(vs) );
+    } else {
         vector<Factor>::const_iterator alpha;
         for( alpha = Qa.begin(); alpha != Qa.end(); alpha++ )
             if( alpha->vars() >> vs )
@@ -220,8 +241,12 @@ Factor JTree::belief( const VarSet &vs ) const {
         if( alpha == Qa.end() ) {
             DAI_THROW(BELIEF_NOT_AVAILABLE);
             return Factor();
-        } else
-            return( alpha->marginal(vs) );
+        } else {
+            if( props.inference == Properties::InfType::SUMPROD )
+                return( alpha->marginal(vs) );
+            else
+                return( alpha->maxMarginal(vs) );
+        }
     }
 }
 
@@ -371,9 +396,10 @@ Real JTree::logZ() const {
 
 size_t JTree::findEfficientTree( const VarSet& vs, RootedTree &Tree, size_t PreviousRoot ) const {
     // find new root clique (the one with maximal statespace overlap with vs)
-    size_t maxval = 0, maxalpha = 0;
+    long double maxval = 0.0;
+    size_t maxalpha = 0;
     for( size_t alpha = 0; alpha < nrORs(); alpha++ ) {
-        size_t val = VarSet(vs & OR(alpha).vars()).nrStates();
+        long double val = VarSet(vs & OR(alpha).vars()).nrStates();
         if( val > maxval ) {
             maxval = val;
             maxalpha = alpha;
@@ -441,16 +467,22 @@ Factor JTree::calcMarginal( const VarSet& vs ) {
     for( beta = Qb.begin(); beta != Qb.end(); beta++ )
         if( beta->vars() >> vs )
             break;
-    if( beta != Qb.end() )
-        return( beta->marginal(vs) );
-    else {
+    if( beta != Qb.end() ) {
+        if( props.inference == Properties::InfType::SUMPROD )
+            return( beta->marginal(vs) );
+        else
+            return( beta->maxMarginal(vs) );
+    } else {
         vector<Factor>::const_iterator alpha;
         for( alpha = Qa.begin(); alpha != Qa.end(); alpha++ )
             if( alpha->vars() >> vs )
                 break;
-        if( alpha != Qa.end() )
-            return( alpha->marginal(vs) );
-        else {
+        if( alpha != Qa.end() ) {
+            if( props.inference == Properties::InfType::SUMPROD )
+                return( alpha->marginal(vs) );
+            else
+                return( alpha->maxMarginal(vs) );
+        } else {
             // Find subtree to do efficient inference
             RootedTree T;
             size_t Tsize = findEfficientTree( vs, T );
@@ -496,7 +528,11 @@ Factor JTree::calcMarginal( const VarSet& vs ) {
                             Qa[T[i].second] *= piet;
                         }
 
-                    Factor new_Qb = Qa[T[i].second].marginal( IR( b[i] ), false );
+                    Factor new_Qb;
+                    if( props.inference == Properties::InfType::SUMPROD )
+                        new_Qb = Qa[T[i].second].marginal( IR( b[i] ), false );
+                    else
+                        new_Qb = Qa[T[i].second].maxMarginal( IR( b[i] ), false );
                     logZ += log(new_Qb.normalize());
                     Qa[T[i].first] *= new_Qb / Qb[b[i]];
                     Qb[b[i]] = new_Qb;
@@ -505,7 +541,10 @@ Factor JTree::calcMarginal( const VarSet& vs ) {
 
                 Factor piet( vsrem, 0.0 );
                 piet.set( s, exp(logZ) );
-                Pvs += piet * Qa[T[0].first].marginal( vs / vsrem, false );      // OPTIMIZE ME
+                if( props.inference == Properties::InfType::SUMPROD )
+                    Pvs += piet * Qa[T[0].first].marginal( vs / vsrem, false );      // OPTIMIZE ME
+                else
+                    Pvs += piet * Qa[T[0].first].maxMarginal( vs / vsrem, false );      // OPTIMIZE ME
 
                 // Restore clamped beliefs
                 for( map<size_t,Factor>::const_iterator alpha = Qa_old.begin(); alpha != Qa_old.end(); alpha++ )
@@ -520,18 +559,12 @@ Factor JTree::calcMarginal( const VarSet& vs ) {
 }
 
 
-std::pair<size_t,double> boundTreewidth( const FactorGraph &fg, greedyVariableElimination::eliminationCostFunction fn ) {
-    ClusterGraph _cg;
-
-    // Copy factors
-    for( size_t I = 0; I < fg.nrFactors(); I++ )
-        _cg.insert( fg.factor(I).vars() );
-
-    // Retain only maximal clusters
-    _cg.eraseNonMaximal();
+std::pair<size_t,long double> boundTreewidth( const FactorGraph &fg, greedyVariableElimination::eliminationCostFunction fn, size_t maxStates ) {
+    // Create cluster graph from factor graph
+    ClusterGraph _cg( fg, true );
 
     // Obtain elimination sequence
-    vector<VarSet> ElimVec = _cg.VarElim( greedyVariableElimination( fn ) ).eraseNonMaximal().toVector();
+    vector<VarSet> ElimVec = _cg.VarElim( greedyVariableElimination( fn ), maxStates ).eraseNonMaximal().clusters();
 
     // Calculate treewidth
     size_t treewidth = 0;
@@ -539,7 +572,7 @@ std::pair<size_t,double> boundTreewidth( const FactorGraph &fg, greedyVariableEl
     for( size_t i = 0; i < ElimVec.size(); i++ ) {
         if( ElimVec[i].size() > treewidth )
             treewidth = ElimVec[i].size();
-        size_t s = ElimVec[i].nrStates();
+        long double s = ElimVec[i].nrStates();
         if( s > nrstates )
             nrstates = s;
     }
@@ -551,75 +584,63 @@ std::pair<size_t,double> boundTreewidth( const FactorGraph &fg, greedyVariableEl
 std::vector<size_t> JTree::findMaximum() const {
     vector<size_t> maximum( nrVars() );
     vector<bool> visitedVars( nrVars(), false );
-    vector<bool> visitedFactors( nrFactors(), false );
-    stack<size_t> scheduledFactors;
-    for( size_t i = 0; i < nrVars(); ++i ) {
-        if( visitedVars[i] )
+    vector<bool> visitedORs( nrORs(), false );
+    stack<size_t> scheduledORs;
+    scheduledORs.push( 0 );
+    while( !scheduledORs.empty() ) {
+        size_t alpha = scheduledORs.top();
+        scheduledORs.pop();
+        if( visitedORs[alpha] )
             continue;
-        visitedVars[i] = true;
+        visitedORs[alpha] = true;
 
-        // Maximise with respect to variable i
-        Prob prod = beliefV(i).p();
-        maximum[i] = prod.argmax().first;
+        // Get marginal of outer region alpha 
+        Prob probF = Qa[alpha].p();
 
-        foreach( const Neighbor &I, nbV(i) )
-            if( !visitedFactors[I] )
-                scheduledFactors.push(I);
-
-        while( !scheduledFactors.empty() ){
-            size_t I = scheduledFactors.top();
-            scheduledFactors.pop();
-            if( visitedFactors[I] )
-                continue;
-            visitedFactors[I] = true;
-
-            // Evaluate if some neighboring variables still need to be fixed; if not, we're done
-            bool allDetermined = true;
-            foreach( const Neighbor &j, nbF(I) )
-                if( !visitedVars[j.node] ) {
-                    allDetermined = false;
+        // The allowed configuration is restrained according to the variables assigned so far:
+        // pick the argmax amongst the allowed states
+        Real maxProb = -numeric_limits<Real>::max();
+        State maxState( OR(alpha).vars() );
+        size_t maxcount = 0;
+        for( State s( OR(alpha).vars() ); s.valid(); ++s ) {
+            // First, calculate whether this state is consistent with variables that
+            // have been assigned already
+            bool allowedState = true;
+            foreach( const Var& j, OR(alpha).vars() ) {
+                size_t j_index = findVar(j);
+                if( visitedVars[j_index] && maximum[j_index] != s(j) ) {
+                    allowedState = false;
                     break;
                 }
-            if( allDetermined )
-                continue;
-
-            // Calculate product of incoming messages on factor I
-            Prob prod2 = beliefF(I).p();
-
-            // The allowed configuration is restrained according to the variables assigned so far:
-            // pick the argmax amongst the allowed states
-            Real maxProb = numeric_limits<Real>::min();
-            State maxState( factor(I).vars() );
-            for( State s( factor(I).vars() ); s.valid(); ++s ){
-                // First, calculate whether this state is consistent with variables that
-                // have been assigned already
-                bool allowedState = true;
-                foreach( const Neighbor &j, nbF(I) )
-                    if( visitedVars[j.node] && maximum[j.node] != s(var(j.node)) ) {
-                        allowedState = false;
-                        break;
-                    }
-                // If it is consistent, check if its probability is larger than what we have seen so far
-                if( allowedState && prod2[s] > maxProb ) {
-                    maxState = s;
-                    maxProb = prod2[s];
-                }
             }
+            // If it is consistent, check if its probability is larger than what we have seen so far
+            if( allowedState ) {
+                if( probF[s] > maxProb ) {
+                    maxState = s;
+                    maxProb = probF[s];
+                    maxcount = 1;
+                } else
+                    maxcount++;
+            }
+        }
+        DAI_ASSERT( maxProb != 0.0 );
+        DAI_ASSERT( Qa[alpha][maxState] != 0.0 );
 
-            // Decode the argmax
-            foreach( const Neighbor &j, nbF(I) ) {
-                if( visitedVars[j.node] ) {
-                    // We have already visited j earlier - hopefully our state is consistent
-                    if( maximum[j.node] != maxState(var(j.node)) && props.verbose >= 1 )
-                        cerr << "JTree::findMaximum - warning: maximum not consistent due to loops." << endl;
-                } else {
-                    // We found a consistent state for variable j
-                    visitedVars[j.node] = true;
-                    maximum[j.node] = maxState( var(j.node) );
-                    foreach( const Neighbor &J, nbV(j) )
-                        if( !visitedFactors[J] )
-                            scheduledFactors.push(J);
-                }
+        // Decode the argmax
+        foreach( const Var& j, OR(alpha).vars() ) {
+            size_t j_index = findVar(j);
+            if( visitedVars[j_index] ) {
+                // We have already visited j earlier - hopefully our state is consistent
+                if( maximum[j_index] != maxState( j ) )
+                    DAI_THROWE(RUNTIME_ERROR,"MAP state inconsistent due to loops");
+            } else {
+                // We found a consistent state for variable j
+                visitedVars[j_index] = true;
+                maximum[j_index] = maxState( j );
+                foreach( const Neighbor &beta, nbOR(alpha) )
+                    foreach( const Neighbor &alpha2, nbIR(beta) )
+                        if( !visitedORs[alpha2] )
+                            scheduledORs.push(alpha2);
             }
         }
     }

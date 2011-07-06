@@ -11,8 +11,6 @@
 /** \file
  *  \brief Contains additional doxygen documentation
  *
- *  \todo Replace all Name members by virtual functions (or add virtual functions returning the Name)
- *
  *  \idea Adapt (part of the) guidelines in http://www.boost.org/development/requirements.html#Design_and_Programming
  *
  *  \idea Use "gcc -MM" to generate dependencies for targets: http://make.paulandlesley.org/autodep.html
@@ -30,21 +28,13 @@
  *  \idea Use boost::uBLAS framework to deal with matrices, especially, with 2D sparse matrices.
  *  See http://www.boost.org/libs/numeric/ublas/doc/matrix_sparse.htm
  *  However: I read somewhere that boost::uBLAS concentrates more on correct implementation than on performance.
- *
- *  \idea Introduce naming scheme:
- *  - all Vars should be named v_..., e.g. v_i instead of i
- *  - all VarSets should be named vs_..., e.g. v_i instead of i
- *  - all Factors should be named f_..., e.g. f_I instead of I
- *  - all indices should be named _..., e.g. _k instead of k
- *  - all iterators should be named i_, e.g. i_i is an iterator to i
- *  - all const_iterators should be named ci_, e.g. ci_i is an iterator to i
  **/
 
 
 /** \mainpage Reference manual for libDAI - A free/open source C++ library for Discrete Approximate Inference methods
- *  \author Joris Mooij, Frederik Eaton
- *  \version git HEAD
- *  \date February 11, 2010 - or later
+ *  \author Joris Mooij (with contributions of Frederik Eaton)
+ *  \version 0.2.7
+ *  \date August 19, 2010
  *
  *  <hr size="1">
  *  \section about About libDAI
@@ -68,6 +58,10 @@
  *  and to easily compare the accuracy and performance with existing algorithms
  *  that have been implemented already.
  *
+ *  A solver using libDAI was amongst the three winners of the UAI 2010 Approximate
+ *  Inference Challenge (see http://www.cs.huji.ac.il/project/UAI10/ for more 
+ *  information). The full source code is provided as part of the library.
+ *
  *  \section features Features
  *  Currently, libDAI supports the following (approximate) inference methods:
  *  - Exact inference by brute force enumeration;
@@ -82,7 +76,8 @@
  *  - Various variants of Loop Corrected Belief Propagation
  *    [\ref MoK07, \ref MoR05];
  *  - Gibbs sampler;
- *  - Conditioned Belief Propagation [\ref EaG09].
+ *  - Conditioned Belief Propagation [\ref EaG09];
+ *  - Decimation algorithm.
  *
  *  These inference methods can be used to calculate partition sums, marginals
  *  over subsets of variables, and MAP states (the joint state of variables that
@@ -125,7 +120,7 @@
  *  \section compatibility Compatibility
  *  
  *  The code has been developed under Debian GNU/Linux with the GCC compiler suite.
- *  libDAI compiles successfully with g++ versions 3.4, 4.1, 4.2 and 4.3.
+ *  libDAI compiles successfully with g++ versions 3.4 up to 4.4.
  *
  *  libDAI has also been successfully compiled with MS Visual Studio 2008 under Windows
  *  (but not all build targets are supported yet) and with Cygwin under Windows.
@@ -168,30 +163,28 @@
  *  \section citations-citations Citing libDAI
  *
  *  If you write a scientific paper describing research that made substantive use
- *  of this program, please:
- *    - mention the fashion in which this software was
- *      used, including the version number, with a citation to the literature, 
- *      to allow replication; 
- *    - mention this software in the Acknowledgements section. 
+ *  of this library, please cite the following paper describing libDAI:\n
  *
- *  An appropriate citation would be:\n
+ *  Joris M. Mooij;\n
+ *  libDAI: A free & open source C++ library for Discrete Approximate Inference in graphical models;\n
+ *  Journal of Machine Learning Research, 11(Aug):2169-2173, 2010.\n
  *
- *  Joris M. Mooij et al. (2010) "libDAI 0.2.4: A free/open source C++ library for Discrete 
- *  Approximate Inference", http://www.libdai.org
- *
- *  or in BiBTeX format:
+ *  In BiBTeX format (for your convenience):\n
  *  
  *  <pre>
- *  \@misc{mooij2010libdai,
- *    author = "Joris M. Mooij et al.",
- *    title = "lib{DAI} 0.2.4: A free/open source {C}++ library for {D}iscrete {A}pproximate {I}nference",
- *    howpublished = "http://www.libdai.org/",
- *    year = 2010
- *  }
- *  </pre>
+ *  \@article{Mooij_libDAI_10,
+ *    author    = {Joris M. Mooij},
+ *    title     = {lib{DAI}: A Free and Open Source {C++} Library for Discrete Approximate Inference in Graphical Models},
+ *    journal   = {Journal of Machine Learning Research},
+ *    year      = 2010,
+ *    month     = Aug,
+ *    volume    = 11,
+ *    pages     = {2169-2173},
+ *    url       = "http://www.jmlr.org/papers/volume11/mooij10a/mooij10a.pdf"
+ *  }</pre>
  *
- *  Moreover, as a personal note, I would appreciate it if you would email
- *  (citations of) papers referencing this work to joris dot mooij at libdai dot org.
+ *  Moreover, as a personal note, I would appreciate it to be informed about any
+ *  publications using libDAI at joris dot mooij at libdai dot org.
  */
 
 
@@ -211,14 +204,14 @@
  *  You need:
  *    - a recent version of gcc (at least version 3.4)
  *    - GNU make
- *    - doxygen
- *    - graphviz
- *    - recent boost C++ libraries (at least version 1.34 if you have
- *      a recent version of GCC, otherwise at least version 1.37; however,
+ *    - recent boost C++ libraries (at least version 1.37; however,
  *      version 1.37 shipped with Ubuntu 9.04 is known not to work)
+ *    - doxygen (only for building the documentation)
+ *    - graphviz (only for using some of the libDAI command line utilities)
+ *    - CImg library (only for building the image segmentation example)
  * 
- *  On Debian/Ubuntu, you can easily install all these packages with a single command:
- *  <pre>  apt-get install g++ make doxygen graphviz libboost-dev libboost-graph-dev libboost-program-options-dev</pre>
+ *  On Debian/Ubuntu, you can easily install the required packages with a single command:
+ *  <pre>  apt-get install g++ make doxygen graphviz libboost-dev libboost-graph-dev libboost-program-options-dev libboost-test-dev cimg-dev</pre>
  *  (root permissions needed).
  *
  *  On Mac OS X (10.4 is known to work), these packages can be installed easily via MacPorts.
@@ -229,20 +222,31 @@
  *  
  *  On Cygwin, the prebuilt Cygwin package boost-1.33.1-x is known not to work.
  *  You can however obtain the latest boost version (you need at least 1.37.0)
- *  from http://www.boost.org/ and compile/install it with:
+ *  from http://www.boost.org/ and build it as described in the next subsection.
  *
- *  <pre>  ./configure
- *  make
- *  make install
- *  </pre>
+ *  \subsubsection build-unix-boost Building boost under Cygwin
+ *
+ *  - Download the latest boost libraries from http://www.boost.org
+ *  - Build the required boost libraries using:
+ *    <pre>
+ *    ./bootstrap.sh --with-libraries=program_options,math,graph,test --prefix=/boost_root/
+ *    ./bjam</pre>
+ *  - In order to use dynamic linking, the boost .dll's should be somewhere in the path. 
+ *    This can be achieved by a command like:
+ *    <pre>
+ *    export PATH=$PATH:/boost_root/stage/lib</pre>
+ *
  *
  *  \subsection build-unix-libdai Building libDAI
  *
  *  To build the libDAI source, first copy a template Makefile.* to Makefile.conf
  *  (for example, copy Makefile.LINUX to Makefile.conf if you use GNU/Linux). 
- *  Then, edit the Makefile.conf template to adapt it to your local setup.
- *  Especially directories may differ from system to system. Platform independent
- *  build options can be set in Makefile.ALL. Finally, run
+ *  Then, edit the Makefile.conf template to adapt it to your local setup. In case
+ *  you want to use Boost libraries which are installed in non-standard locations,
+ *  you have to tell the compiler and linker about their locations (using the
+ *  -I, -L flags for GCC; also you may need to set the LD_LIBRARY_PATH environment 
+ *  variable correctly before running libDAI binaries). Platform independent build
+ *  options can be set in Makefile.ALL. Finally, run
  *  <pre>  make</pre>
  *  The build includes a regression test, which may take a while to complete.
  *
@@ -261,9 +265,30 @@
  *  - A recent version of MicroSoft Visual Studio (2008 is known to work)
  *  - recent boost C++ libraries (version 1.37 or higher)
  *  - GNU make (can be obtained from http://gnuwin32.sourceforge.net)
+ *  - CImg library (only for building the image segmentation example)
  *
  *  For the regression test, you need:
  *  - GNU diff, GNU sed (can be obtained from http://gnuwin32.sourceforge.net)
+ *
+ *  \subsubsection build-windows-boost Building boost under Windows
+ *
+ *  Because building boost under Windows is tricky, I provide some guidance here.
+ *
+ *  - Download the boost zip file from http://www.boost.org/users/download
+ *    and unpack it somewhere.
+ *  - Download the bjam executable from http://www.boost.org/users/download
+ *    and unpack it somewhere else.
+ *  - Download Boost.Build (v2) from http://www.boost.org/docs/tools/build/index.html
+ *    and unpack it yet somewhere else.
+ *  - Edit the file \c boost-build.jam in the main boost directory to change the
+ *    \c BOOST_BUILD directory to the place where you put Boost.Build (use UNIX
+ *    / instead of Windows \ in pathnames).
+ *  - Copy the \c bjam.exe executable into the main boost directory.
+ *    Now if you issue <tt>"bjam --version"</tt> you should get a version and no errors.
+ *    Issueing <tt>"bjam --show-libraries"</tt> will show the libraries that will be built.
+ *  - The following command builds the boost libraries that are relevant for libDAI:
+ *    <pre>
+ *    bjam --with-graph --with-math --with-program_options --with-test link=static runtime-link=shared</pre>
  *
  *  \subsection build-windows-libdai Building libDAI
  *
@@ -458,9 +483,10 @@
  *  - Loop Corrected Belief Propagation: dai::MR [\ref MoR05] and dai::LC [\ref MoK07]
  *  - Gibbs sampling: dai::Gibbs
  *  - Conditioned Belief Propagation: dai::CBP [\ref EaG09]
+ *  - Decimation algorithm: dai::DecMAP
  *
  *  Not all inference tasks are implemented by each method: calculating MAP states
- *  is only possible with dai::JTree and dai::BP, calculating partition sums is
+ *  is only possible with dai::JTree, dai::BP and dai::DECMAP; calculating partition sums is
  *  not possible with dai::MR, dai::LC and dai::Gibbs.
  *
  *  \section terminology-learning Parameter learning
@@ -586,7 +612,6 @@
  *  8 8.9
  *  9 1.3
  *  10 1.6
- *  12 6.4
  *  11 2.6
  *  </pre>
  *
@@ -793,6 +818,12 @@
  *  "Sufficient Conditions for Convergence of the Sum-Product Algorithm",
  *  <em>IEEE Transactions on Information Theory</em> 53(12):4422-4437,
  *  http://ieeexplore.ieee.org/xpl/freeabs_all.jsp?arnumber=4385778
+ *
+ *  \anchor Moo08 \ref Moo08
+ *  J. M. Mooij (2008):
+ *  "Understanding and Improving Belief Propagation",
+ *  <em>Ph.D. Thesis</em> Radboud University Nijmegen
+ *  http://webdoc.ubn.ru.nl/mono/m/mooij_j/undeanimb.pdf
  *
  *  \anchor MoR05 \ref MoR05
  *  A. Montanari and T. Rizzo (2005):

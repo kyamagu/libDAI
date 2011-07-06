@@ -14,8 +14,6 @@
  * 
  *  \todo Replace VarSets by SmallSet<size_t> where appropriate, in order to minimize the use of FactorGraph::findVar().
  *
- *  \todo Implement routines for UAI probabilistic inference evaluation data
- *
  *  \todo Improve SWIG interfaces and merge their build process with the main build process
  */
 
@@ -63,6 +61,9 @@
 #ifdef DAI_WITH_CBP
     #include <dai/cbp.h>
 #endif
+#ifdef DAI_WITH_DECMAP
+    #include <dai/decmap.h>
+#endif
 
 
 /// Namespace for libDAI
@@ -70,7 +71,7 @@ namespace dai {
 
 
 /// Constructs a new inference algorithm.
-/** \param name The name of the inference algorithm (should be one of the names in DAINames).
+/** \param name The name of the inference algorithm.
  *  \param fg The FactorGraph that the algorithm should be applied to.
  *  \param opts A PropertySet specifying the options for the algorithm.
  *  \return Returns a pointer to the new InfAlg object; it is the responsibility of the caller to delete it later.
@@ -118,47 +119,32 @@ std::pair<std::string, PropertySet> parseNameProperties( const std::string &s, c
 std::map<std::string,std::string> readAliasesFile( const std::string &filename );
 
 
-/// Contains the names of all inference algorithms compiled into libDAI.
-static const char* DAINames[] = {
-    ExactInf::Name,
-#ifdef DAI_WITH_BP
-    BP::Name,
-#endif
-#ifdef DAI_WITH_FBP
-    FBP::Name,
-#endif
-#ifdef DAI_WITH_TRWBP
-    TRWBP::Name,
-#endif
-#ifdef DAI_WITH_MF
-    MF::Name,
-#endif
-#ifdef DAI_WITH_HAK
-    HAK::Name,
-#endif
-#ifdef DAI_WITH_LC
-    LC::Name,
-#endif
-#ifdef DAI_WITH_TREEEP
-    TreeEP::Name,
-#endif
-#ifdef DAI_WITH_JTREE
-    JTree::Name,
-#endif
-#ifdef DAI_WITH_MR
-    MR::Name,
-#endif
-#ifdef DAI_WITH_GIBBS
-    Gibbs::Name,
-#endif
-#ifdef DAI_WITH_CBP
-    CBP::Name,
-#endif
-    ""
-};
-
-
 } // end of namespace dai
+
+
+/** \example example.cpp
+ *  This example illustrates how to read a factor graph from a file and how to
+ *  run several inference algorithms (junction tree, loopy belief propagation,
+ *  and the max-product algorithm) on it.
+ */
+
+
+/** \example example_imagesegmentation.cpp
+ *  This example shows how one can use approximate inference in factor graphs
+ *  on a simple vision task: given two images, identify smooth regions where these
+ *  two images differ more than some threshold. This can be used to seperate 
+ *  foreground from background if one image contains the background and the other
+ *  one the combination of background and foreground.
+ *
+ *  \note In order to build this example, a recent version of CImg needs to be installed.
+ */
+
+
+/** \example uai2010-aie-solver.cpp
+ *  This example contains the full source code of the solver that was one of the
+ *  winners (the 'libDAI2' solver) in the UAI 2010 Approximate Inference Challenge
+ *  (see http://www.cs.huji.ac.il/project/UAI10/ for more information).
+ */
 
 
 #endif

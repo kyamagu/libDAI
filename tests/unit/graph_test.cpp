@@ -8,9 +8,6 @@
  */
 
 
-#define BOOST_TEST_DYN_LINK
-
-
 #include <dai/graph.h>
 #include <vector>
 #include <strstream>
@@ -40,8 +37,8 @@ BOOST_AUTO_TEST_CASE( ConstructorsTest ) {
     BOOST_CHECK_EQUAL( G2.isConnected(), false );
     BOOST_CHECK_EQUAL( G2.isTree(), false );
     G2.checkConsistency();
+    BOOST_CHECK( !(G2 == G0) );
     
-    typedef GraphAL::Edge Edge;
     std::vector<Edge> edges;
     edges.push_back( Edge( 0, 1 ) );
     edges.push_back( Edge( 1, 2 ) );
@@ -53,12 +50,23 @@ BOOST_AUTO_TEST_CASE( ConstructorsTest ) {
     BOOST_CHECK_EQUAL( G3.isConnected(), true );
     BOOST_CHECK_EQUAL( G3.isTree(), true );
     G3.checkConsistency();
+    BOOST_CHECK( !(G3 == G0) );
+    BOOST_CHECK( !(G3 == G2) );
+
+    GraphAL G4( G3 );
+    BOOST_CHECK( !(G4 == G0) );
+    BOOST_CHECK( !(G4 == G2) );
+    BOOST_CHECK( G4 == G3 );
+
+    GraphAL G5 = G3;
+    BOOST_CHECK( !(G5 == G0) );
+    BOOST_CHECK( !(G5 == G2) );
+    BOOST_CHECK( G5 == G3 );
 }
 
 
 BOOST_AUTO_TEST_CASE( NeighborTest ) {
     // check nb() accessor / mutator
-    typedef GraphAL::Edge Edge;
     std::vector<Edge> edges;
     edges.push_back( Edge( 0, 1 ) );
     edges.push_back( Edge( 1, 2 ) );
@@ -78,12 +86,14 @@ BOOST_AUTO_TEST_CASE( NeighborTest ) {
     BOOST_CHECK_EQUAL( G.nb(2,0).iter, 0 );
     BOOST_CHECK_EQUAL( G.nb(2,0).node, 1 );
     BOOST_CHECK_EQUAL( G.nb(2,0).dual, 1 );
+    BOOST_CHECK( G.nbSet(0) == SmallSet<size_t>( 1 ) );
+    BOOST_CHECK( G.nbSet(1) == SmallSet<size_t>( 0, 2 ) );
+    BOOST_CHECK( G.nbSet(2) == SmallSet<size_t>( 1 ) );
 }
 
 
 BOOST_AUTO_TEST_CASE( AddEraseTest ) {
     // check addition and erasure of nodes and edges
-    typedef GraphAL::Edge Edge;
     std::vector<Edge> edges;
     edges.push_back( Edge( 0, 1 ) );
     edges.push_back( Edge( 1, 2 ) );
@@ -219,7 +229,7 @@ BOOST_AUTO_TEST_CASE( QueriesAndCreationTest ) {
         BOOST_CHECK( G.isConnected() );
         BOOST_CHECK_EQUAL( G.isTree(), N < 3 );
         for( size_t n1 = 0; n1 < G.nrNodes(); n1++ ) {
-            foreach( const GraphAL::Neighbor &n2, G.nb(n1) ) {
+            foreach( const Neighbor &n2, G.nb(n1) ) {
                 BOOST_CHECK( G.hasEdge( n1, n2 ) );
                 BOOST_CHECK( G.hasEdge( n2, n1 ) );
             }
@@ -243,7 +253,7 @@ BOOST_AUTO_TEST_CASE( QueriesAndCreationTest ) {
             BOOST_CHECK( G.isConnected() );
             BOOST_CHECK_EQUAL( G.isTree(), (N1 <= 1) || (N2 <= 1) );
             for( size_t n1 = 0; n1 < G.nrNodes(); n1++ ) {
-                foreach( const GraphAL::Neighbor &n2, G.nb(n1) ) {
+                foreach( const Neighbor &n2, G.nb(n1) ) {
                     BOOST_CHECK( G.hasEdge( n1, n2 ) );
                     BOOST_CHECK( G.hasEdge( n2, n1 ) );
                 }
@@ -266,7 +276,7 @@ BOOST_AUTO_TEST_CASE( QueriesAndCreationTest ) {
             BOOST_CHECK( G.isConnected() );
             BOOST_CHECK_EQUAL( G.isTree(), (G.nrNodes() <= 2) );
             for( size_t n1 = 0; n1 < G.nrNodes(); n1++ ) {
-                foreach( const GraphAL::Neighbor &n2, G.nb(n1) ) {
+                foreach( const Neighbor &n2, G.nb(n1) ) {
                     BOOST_CHECK( G.hasEdge( n1, n2 ) );
                     BOOST_CHECK( G.hasEdge( n2, n1 ) );
                 }
@@ -282,16 +292,16 @@ BOOST_AUTO_TEST_CASE( QueriesAndCreationTest ) {
         }
 
     // createGraphGrid3D
-    for( size_t N1 = 0; N1 < 10; N1++ )
-        for( size_t N2 = 0; N2 < 10; N2++ )
-            for( size_t N3 = 0; N3 < 10; N3++ ) {
+    for( size_t N1 = 0; N1 < 8; N1++ )
+        for( size_t N2 = 0; N2 < 8; N2++ )
+            for( size_t N3 = 0; N3 < 8; N3++ ) {
                 GraphAL G = createGraphGrid3D( N1, N2, N3, false );
                 BOOST_CHECK_EQUAL( G.nrNodes(), N1 * N2 * N3 );
                 BOOST_CHECK_EQUAL( G.nrEdges(), (N1 > 0 && N2 > 0 && N3 > 0) ? 3 * (N1-1) * (N2-1) * (N3-1) + 2 * (N1-1) * (N2-1) + 2 * (N1-1) * (N3-1) + 2 *  (N2-1) * (N3-1) + (N1-1) + (N2-1) + (N3-1) : 0 );
                 BOOST_CHECK( G.isConnected() );
                 BOOST_CHECK_EQUAL( G.isTree(), (G.nrNodes() == 0) || (N1 <= 1 && N2 <= 1) || (N1 <= 1 && N3 <= 1) || (N2 <= 1 && N3 <= 1) );
                 for( size_t n1 = 0; n1 < G.nrNodes(); n1++ ) {
-                    foreach( const GraphAL::Neighbor &n2, G.nb(n1) ) {
+                    foreach( const Neighbor &n2, G.nb(n1) ) {
                         BOOST_CHECK( G.hasEdge( n1, n2 ) );
                         BOOST_CHECK( G.hasEdge( n2, n1 ) );
                     }
@@ -314,7 +324,7 @@ BOOST_AUTO_TEST_CASE( QueriesAndCreationTest ) {
                 BOOST_CHECK( G.isConnected() );
                 BOOST_CHECK_EQUAL( G.isTree(), (G.nrNodes() <= 2) );
                 for( size_t n1 = 0; n1 < G.nrNodes(); n1++ ) {
-                    foreach( const GraphAL::Neighbor &n2, G.nb(n1) ) {
+                    foreach( const Neighbor &n2, G.nb(n1) ) {
                         BOOST_CHECK( G.hasEdge( n1, n2 ) );
                         BOOST_CHECK( G.hasEdge( n2, n1 ) );
                     }
@@ -342,7 +352,7 @@ BOOST_AUTO_TEST_CASE( QueriesAndCreationTest ) {
         BOOST_CHECK( G.isConnected() );
         BOOST_CHECK_EQUAL( G.isTree(), N <= 2 );
         for( size_t n1 = 0; n1 < G.nrNodes(); n1++ ) {
-            foreach( const GraphAL::Neighbor &n2, G.nb(n1) ) {
+            foreach( const Neighbor &n2, G.nb(n1) ) {
                 BOOST_CHECK( G.hasEdge( n1, n2 ) );
                 BOOST_CHECK( G.hasEdge( n2, n1 ) );
             }
@@ -365,7 +375,7 @@ BOOST_AUTO_TEST_CASE( QueriesAndCreationTest ) {
         BOOST_CHECK( G.isConnected() );
         BOOST_CHECK( G.isTree() );
         for( size_t n1 = 0; n1 < G.nrNodes(); n1++ ) {
-            foreach( const GraphAL::Neighbor &n2, G.nb(n1) ) {
+            foreach( const Neighbor &n2, G.nb(n1) ) {
                 BOOST_CHECK( G.hasEdge( n1, n2 ) );
                 BOOST_CHECK( G.hasEdge( n2, n1 ) );
             }
@@ -381,15 +391,15 @@ BOOST_AUTO_TEST_CASE( QueriesAndCreationTest ) {
     }
 
     // createGraphRegular
-    for( size_t N = 0; N < 100; N++ ) {
-        for( size_t d = 0; d < N && d <= 20; d++ ) {
+    for( size_t N = 0; N < 50; N++ ) {
+        for( size_t d = 0; d < N && d <= 15; d++ ) {
             if( (N * d) % 2 == 0 ) {
                 GraphAL G = createGraphRegular( N, d );
                 BOOST_CHECK_EQUAL( G.nrNodes(), N );
                 BOOST_CHECK_EQUAL( G.nrEdges(), d * N / 2 );
                 for( size_t n1 = 0; n1 < G.nrNodes(); n1++ ) {
                     BOOST_CHECK_EQUAL( G.nb(n1).size(), d );
-                    foreach( const GraphAL::Neighbor &n2, G.nb(n1) ) {
+                    foreach( const Neighbor &n2, G.nb(n1) ) {
                         BOOST_CHECK( G.hasEdge( n1, n2 ) );
                         BOOST_CHECK( G.hasEdge( n2, n1 ) );
                     }
@@ -419,29 +429,31 @@ BOOST_AUTO_TEST_CASE( StreamTest ) {
     G.addEdge( 3, 2 );
 
     std::stringstream ss;
-    G.printDot( ss );
-
     std::string s;
-    std::getline( ss, s );
-    BOOST_CHECK_EQUAL( s, "graph G {" );
-    std::getline( ss, s );
-    BOOST_CHECK_EQUAL( s, "node[shape=circle,width=0.4,fixedsize=true];" );
-    std::getline( ss, s );
-    BOOST_CHECK_EQUAL( s, "\tx0;" );
-    std::getline( ss, s );
-    BOOST_CHECK_EQUAL( s, "\tx1;" );
-    std::getline( ss, s );
-    BOOST_CHECK_EQUAL( s, "\tx2;" );
-    std::getline( ss, s );
-    BOOST_CHECK_EQUAL( s, "\tx3;" );
-    std::getline( ss, s );
-    BOOST_CHECK_EQUAL( s, "\tx0 -- x1;" );
-    std::getline( ss, s );
-    BOOST_CHECK_EQUAL( s, "\tx0 -- x2;" );
-    std::getline( ss, s );
-    BOOST_CHECK_EQUAL( s, "\tx1 -- x3;" );
-    std::getline( ss, s );
-    BOOST_CHECK_EQUAL( s, "\tx2 -- x3;" );
-    std::getline( ss, s );
-    BOOST_CHECK_EQUAL( s, "}" );
+
+    G.printDot( ss );
+    std::getline( ss, s ); BOOST_CHECK_EQUAL( s, "graph GraphAL {" );
+    std::getline( ss, s ); BOOST_CHECK_EQUAL( s, "node[shape=circle,width=0.4,fixedsize=true];" );
+    std::getline( ss, s ); BOOST_CHECK_EQUAL( s, "\tx0;" );
+    std::getline( ss, s ); BOOST_CHECK_EQUAL( s, "\tx1;" );
+    std::getline( ss, s ); BOOST_CHECK_EQUAL( s, "\tx2;" );
+    std::getline( ss, s ); BOOST_CHECK_EQUAL( s, "\tx3;" );
+    std::getline( ss, s ); BOOST_CHECK_EQUAL( s, "\tx0 -- x1;" );
+    std::getline( ss, s ); BOOST_CHECK_EQUAL( s, "\tx0 -- x2;" );
+    std::getline( ss, s ); BOOST_CHECK_EQUAL( s, "\tx1 -- x3;" );
+    std::getline( ss, s ); BOOST_CHECK_EQUAL( s, "\tx2 -- x3;" );
+    std::getline( ss, s ); BOOST_CHECK_EQUAL( s, "}" );
+
+    ss << G;
+    std::getline( ss, s ); BOOST_CHECK_EQUAL( s, "graph GraphAL {" );
+    std::getline( ss, s ); BOOST_CHECK_EQUAL( s, "node[shape=circle,width=0.4,fixedsize=true];" );
+    std::getline( ss, s ); BOOST_CHECK_EQUAL( s, "\tx0;" );
+    std::getline( ss, s ); BOOST_CHECK_EQUAL( s, "\tx1;" );
+    std::getline( ss, s ); BOOST_CHECK_EQUAL( s, "\tx2;" );
+    std::getline( ss, s ); BOOST_CHECK_EQUAL( s, "\tx3;" );
+    std::getline( ss, s ); BOOST_CHECK_EQUAL( s, "\tx0 -- x1;" );
+    std::getline( ss, s ); BOOST_CHECK_EQUAL( s, "\tx0 -- x2;" );
+    std::getline( ss, s ); BOOST_CHECK_EQUAL( s, "\tx1 -- x3;" );
+    std::getline( ss, s ); BOOST_CHECK_EQUAL( s, "\tx2 -- x3;" );
+    std::getline( ss, s ); BOOST_CHECK_EQUAL( s, "}" );
 }

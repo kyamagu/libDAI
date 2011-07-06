@@ -18,6 +18,7 @@
 
 
 #include <string>
+#include <dai/enum.h>
 #include <dai/daialg.h>
 #include <dai/factorgraph.h>
 #include <dai/properties.h>
@@ -31,6 +32,9 @@ namespace dai {
  *  single variable marginals (beliefs). The update equation for 
  *  a single belief \f$b_i\f$ is given by:
  *    \f[ b_i^{\mathrm{new}}(x_i) \propto \prod_{I\in N_i} \exp \left( \sum_{x_{N_I \setminus \{i\}}} \log f_I(x_I) \prod_{j \in N_I \setminus \{i\}} b_j(x_j) \right) \f]
+ *  for naive mean field and by
+ *    \f[ b_i^{\mathrm{new}}(x_i) \propto \prod_{I\in N_i} \left( \sum_{x_{N_I \setminus \{i\}}} f_I(x_I) \prod_{j \in N_I \setminus \{i\}} b_j(x_j) \right) \f]
+ *  for hard-spin mean field.
  *  These update equations are performed for all variables until convergence.
  */
 class MF : public DAIAlgFG {
@@ -45,6 +49,12 @@ class MF : public DAIAlgFG {
     public:
         /// Parameters for MF
         struct Properties {
+            /// Enumeration of possible message initializations
+            DAI_ENUM(InitType,UNIFORM,RANDOM);
+
+            /// Enumeration of possible update types
+            DAI_ENUM(UpdateType,NAIVE,HARDSPIN);
+
             /// Verbosity (amount of output sent to stderr)
             size_t verbose;
 
@@ -56,10 +66,13 @@ class MF : public DAIAlgFG {
 
             /// Damping constant (0.0 means no damping, 1.0 is maximum damping)
             Real damping;
-        } props;
+            
+            /// How to initialize the messages/beliefs
+            InitType init;
 
-        /// Name of this inference algorithm
-        static const char *Name;
+            /// How to update the messages/beliefs
+            UpdateType updates;
+        } props;
 
     public:
     /// \name Constructors/destructors
@@ -80,7 +93,7 @@ class MF : public DAIAlgFG {
     /// \name General InfAlg interface
     //@{
         virtual MF* clone() const { return new MF(*this); }
-        virtual std::string identify() const;
+        virtual std::string name() const { return "MF"; }
         virtual Factor belief( const Var &v ) const { return beliefV( findVar( v ) ); }
         virtual Factor belief( const VarSet &vs ) const;
         virtual Factor beliefV( size_t i ) const;
@@ -91,6 +104,7 @@ class MF : public DAIAlgFG {
         virtual Real run();
         virtual Real maxDiff() const { return _maxdiff; }
         virtual size_t Iterations() const { return _iters; }
+        virtual void setMaxIter( size_t maxiter ) { props.maxiter = maxiter; }
         virtual void setProperties( const PropertySet &opts );
         virtual PropertySet getProperties() const;
         virtual std::string printProperties() const;

@@ -31,21 +31,22 @@ WITH_JTREE=true
 WITH_MR=true
 WITH_GIBBS=true
 WITH_CBP=true
+WITH_DECMAP=true
 
-# Build doxygen documentation?
-WITH_DOC=
-
-# Build with debug info?
+# Build with debug info? (slower but safer)
 DEBUG=true
 
-# Build MatLab interface?
-WITH_MATLAB=
+# Build doxygen documentation? (doxygen and TeX need to be installed)
+WITH_DOC=
 
-# MatLab version 7.3 (R2006b) or newer?
-NEW_MATLAB=true
+# Build MatLab interface? (MatLab needs to be installed)
+WITH_MATLAB=
 
 # Enable sparse factors? (should be undefined for dense factors,
 # or 0 for sparse factors implemented using a map, or non-zero
 # for sparse factors implemented using a vector)
 # NOTE: sparse factors are experimental!
 DAI_SPARSE=
+
+# Build image segmentation example? (CImg needs to be installed)
+WITH_CIMG=

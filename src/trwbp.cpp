@@ -24,9 +24,6 @@ namespace dai {
 using namespace std;
 
 
-const char *TRWBP::Name = "TRWBP";
-
-
 void TRWBP::setProperties( const PropertySet &opts ) {
     BP::setProperties( opts );
 
@@ -54,11 +51,6 @@ string TRWBP::printProperties() const {
 }
 
 
-string TRWBP::identify() const {
-    return string(Name) + printProperties();
-}
-
-
 // This code has been copied from bp.cpp, except where comments indicate TRWBP-specific behaviour
 Real TRWBP::logZ() const {
     Real sum = 0.0;
@@ -70,7 +62,8 @@ Real TRWBP::logZ() const {
         Real c_i = 0.0;
         foreach( const Neighbor &I, nbV(i) )
             c_i += Weight(I);
-        sum += (1.0 - c_i) * beliefV(i).entropy();  // TRWBP/FBP
+        if( c_i != 1.0 )
+            sum += (1.0 - c_i) * beliefV(i).entropy();  // TRWBP/FBP
     }
     return sum;
 }
@@ -102,7 +95,7 @@ Prob TRWBP::calcIncomingMessageProduct( size_t I, bool without_i, size_t i ) con
                         prod_j += message( j, J.iter ) * c_J;
                     else
                         prod_j *= message( j, J.iter ) ^ c_J;
-                } else { // TRWBP: multiply by m_Ij^(c_I-1)
+                } else if( c_J != 1.0 ) { // TRWBP: multiply by m_Ij^(c_I-1)
                     if( props.logdomain )
                         prod_j += message( j, J.iter ) * (c_J - 1.0);
                     else

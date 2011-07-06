@@ -6,6 +6,7 @@
  *
  *  Copyright (C) 2006-2010  Joris Mooij  [joris dot mooij at libdai dot org]
  *  Copyright (C) 2006-2007  Radboud University Nijmegen, The Netherlands
+ *  Copyright (C) 2009       Sebastian Nowozin
  */
 
 
@@ -49,18 +50,18 @@ void mexFunction( int nlhs, mxArray *plhs[], int nrhs, const mxArray*prhs[] ) {
     if( ((nrhs < NR_IN) || (nrhs > NR_IN + NR_IN_OPT)) || ((nlhs < NR_OUT) || (nlhs > NR_OUT + NR_OUT_OPT)) ) {
         mexErrMsgTxt("Usage: [logZ,q,md,qv,qf,qmap] = dai(psi,method,opts)\n\n"
         "\n"
-        "INPUT:  psi        = linear cell array containing the factors \n"
-        "                     psi{i} should be a structure with a Member field\n"
-        "                     and a P field, like a CPTAB).\n"
-        "        method     = name of the method (see README)\n"
-        "        opts       = string of options (see README)\n"
+        "INPUT:  psi        = linear cell array containing the factors\n"
+        "                     (psi{i} should be a structure with a Member field\n"
+        "                     and a P field).\n"
+        "        method     = name of the method\n"
+        "        opts       = string of options\n"
         "\n"
         "OUTPUT: logZ       = approximation of the logarithm of the partition sum.\n"
         "        q          = linear cell array containing all final beliefs.\n"
         "        md         = maxdiff (final linf-dist between new and old single node beliefs).\n"
         "        qv         = linear cell array containing all variable beliefs.\n"
         "        qf         = linear cell array containing all factor beliefs.\n"
-        "        qmap       = (V,1) array containing the MAP labeling (only for BP,JTree).\n");
+        "        qmap       = linear array containing the MAP state (only for BP,JTree).\n");
     }
 
     char *method;
@@ -91,13 +92,11 @@ void mexFunction( int nlhs, mxArray *plhs[], int nrhs, const mxArray*prhs[] ) {
     obj->init();
     obj->run();
 
-
     // Save logZ
     double logZ = obj->logZ();
 
     // Save maxdiff
     double maxdiff = obj->maxDiff();
-
 
     // Hand over results to MATLAB
     LOGZ_OUT = mxCreateDoubleMatrix(1,1,mxREAL);
@@ -126,25 +125,26 @@ void mexFunction( int nlhs, mxArray *plhs[], int nrhs, const mxArray*prhs[] ) {
 
     if( nlhs >= 6 ) {
         std::vector<std::size_t> map_state;
-        if( obj->identify() == "BP" ) {
-            BP* obj_bp = dynamic_cast<BP *>(obj);
-            DAI_ASSERT( obj_bp != 0 );
-            map_state = obj_bp->findMaximum();
-        } else if( obj->identify() == "JTREE" ) {
-            JTree* obj_jtree = dynamic_cast<JTree *>(obj);
-            DAI_ASSERT( obj_jtree != 0 );
-            map_state = obj_jtree->findMaximum();
-        } else {
-            mexErrMsgTxt("MAP state assignment works only for BP, JTree.\n");
-            delete obj;
-            return;
+        bool supported = true;
+        try {
+            map_state = obj->findMaximum();
+        } catch( Exception &e ) {
+            if( e.code() == Exception::NOT_IMPLEMENTED )
+                supported = false;
+            else
+                throw;
         }
-        QMAP_OUT = mxCreateNumericMatrix(map_state.size(), 1, mxUINT32_CLASS, mxREAL);
-        uint32_T* qmap_p = reinterpret_cast<uint32_T *>(mxGetPr(QMAP_OUT));
-        for (size_t n = 0; n < map_state.size(); ++n)
-            qmap_p[n] = map_state[n];
+        if( supported ) {
+            QMAP_OUT = mxCreateNumericMatrix(map_state.size(), 1, mxUINT32_CLASS, mxREAL);
+            uint32_T* qmap_p = reinterpret_cast<uint32_T *>(mxGetPr(QMAP_OUT));
+            for (size_t n = 0; n < map_state.size(); ++n)
+                qmap_p[n] = map_state[n];
+        } else {
+            delete obj;
+            mexErrMsgTxt("Calculating a MAP state is not supported by this inference algorithm");
+        }
     }
-    delete obj;
 
+    delete obj;
     return;
 }

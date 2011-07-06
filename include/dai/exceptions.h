@@ -98,6 +98,7 @@ class Exception : public std::runtime_error {
                    FACTORGRAPH_NOT_CONNECTED,
                    INTERNAL_ERROR,
                    RUNTIME_ERROR,
+                   OUT_OF_MEMORY,
                    NUM_ERRORS};  // NUM_ERRORS should be the last entry
 
         /// Constructor
@@ -110,7 +111,7 @@ class Exception : public std::runtime_error {
         Code code() const { return errorcode; }
 
         /// Returns error message corresponding to an error code
-        const std::string &message( const Code c ) const { return ErrorStrings[c]; }
+        const std::string& message( const Code c ) const { return ErrorStrings[c]; }
 
 
     private:

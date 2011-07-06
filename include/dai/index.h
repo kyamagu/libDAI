@@ -157,14 +157,32 @@ class Permute {
         /// Construct from vector of variables.
         /** The implied permutation maps the index of each variable in \a vars according to the canonical ordering 
          *  (i.e., sorted ascendingly according to their label) to the index it has in \a vars.
+         *  If \a reverse == \c true, reverses the indexing in \a vars first.
          */
-        Permute( const std::vector<Var> &vars ) : _ranges(vars.size()), _sigma(vars.size()) {
-            for( size_t i = 0; i < vars.size(); ++i )
-                _ranges[i] = vars[i].states();
-            VarSet vs( vars.begin(), vars.end(), vars.size() );
-            VarSet::const_iterator vs_i = vs.begin();
-            for( size_t i = 0; i < vs.size(); ++i, ++vs_i )
-                _sigma[i] = find( vars.begin(), vars.end(), *vs_i ) - vars.begin();
+        Permute( const std::vector<Var> &vars, bool reverse=false ) : _ranges(), _sigma() {
+            size_t N = vars.size();
+
+            // construct ranges
+            _ranges.reserve( N );
+            for( size_t i = 0; i < N; ++i )
+                if( reverse )
+                    _ranges.push_back( vars[N - 1 - i].states() );
+                else
+                    _ranges.push_back( vars[i].states() );
+
+            // construct VarSet out of vars
+            VarSet vs( vars.begin(), vars.end(), N );
+            DAI_ASSERT( vs.size() == N );
+            
+            // construct sigma
+            _sigma.reserve( N );
+            for( VarSet::const_iterator vs_i = vs.begin(); vs_i != vs.end(); ++vs_i ) {
+                size_t ind = find( vars.begin(), vars.end(), *vs_i ) - vars.begin();
+                if( reverse )
+                    _sigma.push_back( N - 1 - ind );
+                else
+                    _sigma.push_back( ind );
+            }
         }
 
         /// Calculates a permuted linear index.
@@ -195,11 +213,14 @@ class Permute {
             return sigma_li;
         }
 
-        /// Returns const reference to the permutation
+        /// Returns constant reference to the permutation
         const std::vector<size_t>& sigma() const { return _sigma; }
 
         /// Returns reference to the permutation
         std::vector<size_t>& sigma() { return _sigma; }
+
+        /// Returns constant reference to the dimensionality vector
+        const std::vector<size_t>& ranges() { return _ranges; }
 
         /// Returns the result of applying the permutation on \a i
         size_t operator[]( size_t i ) const {
@@ -208,6 +229,18 @@ class Permute {
 #else
             return _sigma[i];
 #endif
+        }
+
+        /// Returns the inverse permutation
+        Permute inverse() const {
+            size_t N = _ranges.size();
+            std::vector<size_t> invRanges( N, 0 );
+            std::vector<size_t> invSigma( N, 0 );
+            for( size_t i = 0; i < N; i++ ) {
+                invSigma[_sigma[i]] = i;
+                invRanges[i] = _ranges[_sigma[i]];
+            }
+            return Permute( invRanges, invSigma );
         }
 };
 
@@ -321,6 +354,11 @@ class multifor {
  *  (and document it clearly, explaining the concept of state); 
  *  add more optimized variants of the State class like IndexFor 
  *  (e.g. for TFactor<>::slice()).
+ *
+ *  \todo The State class is dangerous because currently it represents a state both as
+ *  an integer and as a map<Var, size_t>; if the cardinality of the joint state space
+ *  becomes too large, the state no longer fits into an integer, and the two representations
+ *  are no longer consistent... this should be fixed!
  */
 class State {
     private:
@@ -390,7 +428,6 @@ class State {
 
         /// Return current state of variable \a v, or 0 if \a v is not in \c *this
         size_t operator() ( const Var &v ) const {
-            DAI_ASSERT( valid() );
             states_type::const_iterator entry = states.find( v );
             if( entry == states.end() )
                 return 0;
@@ -400,7 +437,6 @@ class State {
 
         /// Return linear state of variables in \a vs, assuming that variables that are not in \c *this are in state 0
         size_t operator() ( const VarSet &vs ) const {
-            DAI_ASSERT( valid() );
             size_t vs_state = 0;
             size_t prod = 1;
             for( VarSet::const_iterator v = vs.begin(); v != vs.end(); v++ ) {

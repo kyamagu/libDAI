@@ -12,6 +12,9 @@
 /// \file
 /// \brief Defines class HAK, which implements a variant of Generalized Belief Propagation.
 /// \idea Implement more general region graphs and corresponding Generalized Belief Propagation updates as described in [\ref YFW05].
+/// \todo Use ClusterGraph instead of a vector<VarSet> for speed.
+/// \todo Optimize this code for large factor graphs.
+/// \todo Implement GBP parent-child  algorithm.
 
 
 #ifndef __defined_libdai_hak_h
@@ -65,6 +68,9 @@ class HAK : public DAIAlgRG {
             /// Maximum number of iterations
             size_t maxiter;
 
+            /// Maximum time (in seconds)
+            double maxtime;
+
             /// Tolerance for convergence test
             Real tol;
 
@@ -83,9 +89,6 @@ class HAK : public DAIAlgRG {
             /// Depth of loops (only relevant for \a clusters == \c ClustersType::LOOP)
             size_t loopdepth;
         } props;
-
-        /// Name of this inference algorithm
-        static const char *Name;
 
     public:
     /// \name Constructors/destructors
@@ -107,7 +110,7 @@ class HAK : public DAIAlgRG {
     /// \name General InfAlg interface
     //@{
         virtual HAK* clone() const { return new HAK(*this); }
-        virtual std::string identify() const;
+        virtual std::string name() const { return "HAK"; }
         virtual Factor belief( const VarSet &vs ) const;
         virtual std::vector<Factor> beliefs() const;
         virtual Real logZ() const;
@@ -116,6 +119,7 @@ class HAK : public DAIAlgRG {
         virtual Real run();
         virtual Real maxDiff() const { return _maxdiff; }
         virtual size_t Iterations() const { return _iters; }
+        virtual void setMaxIter( size_t maxiter ) { props.maxiter = maxiter; }
         virtual void setProperties( const PropertySet &opts );
         virtual PropertySet getProperties() const;
         virtual std::string printProperties() const;

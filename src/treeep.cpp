@@ -23,19 +23,24 @@ namespace dai {
 using namespace std;
 
 
-const char *TreeEP::Name = "TREEEP";
-
-
 void TreeEP::setProperties( const PropertySet &opts ) {
     DAI_ASSERT( opts.hasKey("tol") );
-    DAI_ASSERT( opts.hasKey("maxiter") );
-    DAI_ASSERT( opts.hasKey("verbose") );
     DAI_ASSERT( opts.hasKey("type") );
 
     props.tol = opts.getStringAs<Real>("tol");
-    props.maxiter = opts.getStringAs<size_t>("maxiter");
-    props.verbose = opts.getStringAs<size_t>("verbose");
     props.type = opts.getStringAs<Properties::TypeType>("type");
+    if( opts.hasKey("maxiter") )
+        props.maxiter = opts.getStringAs<size_t>("maxiter");
+    else
+        props.maxiter = 10000;
+    if( opts.hasKey("maxtime") )
+        props.maxtime = opts.getStringAs<Real>("maxtime");
+    else
+        props.maxtime = INFINITY;
+    if( opts.hasKey("verbose") )
+        props.verbose = opts.getStringAs<size_t>("verbose");
+    else
+        props.verbose = 0;
 }
 
 
@@ -43,6 +48,7 @@ PropertySet TreeEP::getProperties() const {
     PropertySet opts;
     opts.set( "tol", props.tol );
     opts.set( "maxiter", props.maxiter );
+    opts.set( "maxtime", props.maxtime );
     opts.set( "verbose", props.verbose );
     opts.set( "type", props.type );
     return opts;
@@ -54,6 +60,7 @@ string TreeEP::printProperties() const {
     s << "[";
     s << "tol=" << props.tol << ",";
     s << "maxiter=" << props.maxiter << ",";
+    s << "maxtime=" << props.maxtime << ",";
     s << "verbose=" << props.verbose << ",";
     s << "type=" << props.type << "]";
     return s.str();
@@ -63,11 +70,8 @@ string TreeEP::printProperties() const {
 TreeEP::TreeEP( const FactorGraph &fg, const PropertySet &opts ) : JTree(fg, opts("updates",string("HUGIN")), false), _maxdiff(0.0), _iters(0), props(), _Q() {
     setProperties( opts );
 
-    if( !isConnected() )
-       DAI_THROW(FACTORGRAPH_NOT_CONNECTED);
-
     if( opts.hasKey("tree") ) {
-        construct( opts.getAs<RootedTree>("tree") );
+        construct( fg, opts.getAs<RootedTree>("tree") );
     } else {
         if( props.type == Properties::TypeType::ORG || props.type == Properties::TypeType::ALT ) {
             // ORG: construct weighted graph with as weights a crude estimate of the
@@ -76,54 +80,70 @@ TreeEP::TreeEP( const FactorGraph &fg, const PropertySet &opts ) : JTree(fg, opt
             // effective interaction strength between pairs of nodes
 
             WeightedGraph<Real> wg;
-            for( size_t i = 0; i < nrVars(); ++i ) {
-                Var v_i = var(i);
-                VarSet di = delta(i);
-                for( VarSet::const_iterator j = di.begin(); j != di.end(); j++ )
-                    if( v_i < *j ) {
-                        VarSet ij(v_i,*j);
+            // in order to get a connected weighted graph, we start
+            // by connecting every variable to the zero'th variable with weight 0
+            for( size_t i = 1; i < fg.nrVars(); i++ )
+                wg[UEdge(i,0)] = 0.0;
+            for( size_t i = 0; i < fg.nrVars(); i++ ) {
+                SmallSet<size_t> delta_i = fg.bipGraph().delta1( i, false );
+                const Var& v_i = fg.var(i);
+                foreach( size_t j, delta_i ) 
+                    if( i < j ) {
+                        const Var& v_j = fg.var(j);
+                        VarSet v_ij( v_i, v_j );
+                        SmallSet<size_t> nb_ij = fg.bipGraph().nb1Set( i ) | fg.bipGraph().nb1Set( j );
                         Factor piet;
-                        for( size_t I = 0; I < nrFactors(); I++ ) {
-                            VarSet Ivars = factor(I).vars();
+                        foreach( size_t I, nb_ij ) {
+                            const VarSet& Ivars = fg.factor(I).vars();
                             if( props.type == Properties::TypeType::ORG ) {
-                                if( (Ivars == v_i) || (Ivars == *j) )
-                                    piet *= factor(I);
-                                else if( Ivars >> ij )
-                                    piet *= factor(I).marginal( ij );
+                                if( (Ivars == v_i) || (Ivars == v_j) )
+                                    piet *= fg.factor(I);
+                                else if( Ivars >> v_ij )
+                                    piet *= fg.factor(I).marginal( v_ij );
                             } else {
-                                if( Ivars >> ij )
-                                    piet *= factor(I);
+                                if( Ivars >> v_ij )
+                                    piet *= fg.factor(I);
                             }
                         }
                         if( props.type == Properties::TypeType::ORG ) {
-                            if( piet.vars() >> ij ) {
-                                piet = piet.marginal( ij );
-                                Factor pietf = piet.marginal(v_i) * piet.marginal(*j);
-                                wg[UEdge(i,findVar(*j))] = dist( piet, pietf, DISTKL );
-                            } else
-                                wg[UEdge(i,findVar(*j))] = 0;
-                        } else {
-                            wg[UEdge(i,findVar(*j))] = piet.strength(v_i, *j);
-                        }
+                            if( piet.vars() >> v_ij ) {
+                                piet = piet.marginal( v_ij );
+                                Factor pietf = piet.marginal(v_i) * piet.marginal(v_j);
+                                wg[UEdge(i,j)] = dist( piet, pietf, DISTKL );
+                            } else {
+                                // this should never happen...
+                                DAI_ASSERT( 0 == 1 );
+                                wg[UEdge(i,j)] = 0;
+                            }
+                        } else
+                            wg[UEdge(i,j)] = piet.strength(v_i, v_j);
                     }
             }
 
             // find maximal spanning tree
-            construct( MaxSpanningTree( wg, true ) );
+            if( props.verbose >= 3 )
+                cerr << "WeightedGraph: " << wg << endl;
+            RootedTree t = MaxSpanningTree( wg, true );
+            if( props.verbose >= 3 )
+                cerr << "Spanningtree: " << t << endl;
+            construct( fg, t );
         } else
             DAI_THROW(UNKNOWN_ENUM_VALUE);
     }
 }
 
 
-void TreeEP::construct( const RootedTree &tree ) {
+void TreeEP::construct( const FactorGraph& fg, const RootedTree& tree ) {
+    // Copy the factor graph
+    FactorGraph::operator=( fg );
+
     vector<VarSet> cl;
     for( size_t i = 0; i < tree.size(); i++ )
         cl.push_back( VarSet( var(tree[i].first), var(tree[i].second) ) );
 
     // If no outer region can be found subsuming that factor, label the
     // factor as off-tree.
-    JTree::construct( cl, false );
+    JTree::construct( *this, cl, false );
 
     if( props.verbose >= 1 )
         cerr << "TreeEP::construct: The tree has size " << JTree::RTree.size() << endl;
@@ -156,11 +176,6 @@ void TreeEP::construct( const RootedTree &tree ) {
 }
 
 
-string TreeEP::identify() const {
-    return string(Name) + printProperties();
-}
-
-
 void TreeEP::init() {
     runHUGIN();
 
@@ -184,7 +199,7 @@ Real TreeEP::run() {
     // do several passes over the network until maximum number of iterations has
     // been reached or until the maximum belief difference is smaller than tolerance
     Real maxDiff = INFINITY;
-    for( _iters = 0; _iters < props.maxiter && maxDiff > props.tol; _iters++ ) {
+    for( _iters = 0; _iters < props.maxiter && maxDiff > props.tol && (toc() - tic) < props.maxtime; _iters++ ) {
         for( size_t I = 0; I < nrFactors(); I++ )
             if( offtree(I) ) {
                 _Q[I].InvertAndMultiply( Qa, Qb );
@@ -200,7 +215,7 @@ Real TreeEP::run() {
         swap( newBeliefs, oldBeliefs );
 
         if( props.verbose >= 3 )
-            cerr << Name << "::run:  maxdiff " << maxDiff << " after " << _iters+1 << " passes" << endl;
+            cerr << name() << "::run:  maxdiff " << maxDiff << " after " << _iters+1 << " passes" << endl;
     }
 
     if( maxDiff > _maxdiff )
@@ -210,10 +225,10 @@ Real TreeEP::run() {
         if( maxDiff > props.tol ) {
             if( props.verbose == 1 )
                 cerr << endl;
-            cerr << Name << "::run:  WARNING: not converged within " << props.maxiter << " passes (" << toc() - tic << " seconds)...final maxdiff:" << maxDiff << endl;
+            cerr << name() << "::run:  WARNING: not converged after " << _iters << " passes (" << toc() - tic << " seconds)...final maxdiff:" << maxDiff << endl;
         } else {
             if( props.verbose >= 3 )
-                cerr << Name << "::run:  ";
+                cerr << name() << "::run:  ";
             cerr << "converged in " << _iters << " passes (" << toc() - tic << " seconds)." << endl;
         }
     }

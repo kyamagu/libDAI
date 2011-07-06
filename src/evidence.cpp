@@ -36,11 +36,11 @@ void Evidence::addEvidenceTabFile( std::istream &is, FactorGraph &fg ) {
 void Evidence::addEvidenceTabFile( std::istream &is, std::map<std::string, Var> &varMap ) {
     std::string line;
     getline( is, line );
-    size_t line_number = 0;
+    size_t line_number = 2;
 
     // Parse header
     std::vector<std::string> header_fields;
-    tokenizeString( line, header_fields );
+    header_fields = tokenizeString( line, true );
     std::vector<std::string>::const_iterator p_field = header_fields.begin();
     if( p_field == header_fields.end() )
         DAI_THROWE(INVALID_EVIDENCE_FILE,"Empty header line");
@@ -62,7 +62,7 @@ void Evidence::addEvidenceTabFile( std::istream &is, std::map<std::string, Var> 
         line_number++;
 
         std::vector<std::string> fields;
-        tokenizeString( line, fields );
+        fields = tokenizeString( line, true, "\t" );
         if( fields.size() != vars.size() )
             DAI_THROWE(INVALID_EVIDENCE_FILE,"Invalid number of fields in line " + boost::lexical_cast<std::string>(line_number));
 
@@ -71,7 +71,7 @@ void Evidence::addEvidenceTabFile( std::istream &is, std::map<std::string, Var> 
             if( fields[i].size() > 0 ) { // skip if missing observation
                 if( fields[i].find_first_not_of("0123456789") != std::string::npos )
                     DAI_THROWE(INVALID_EVIDENCE_FILE,"Invalid state " + fields[i] + " in line " + boost::lexical_cast<std::string>(line_number));
-                size_t state = atoi( fields[i].c_str() );
+                size_t state = fromString<size_t>( fields[i].c_str() );
                 if( state >= vars[i].states() )
                     DAI_THROWE(INVALID_EVIDENCE_FILE,"State " + fields[i] + " too large in line " + boost::lexical_cast<std::string>(line_number));
                 sample[vars[i]] = state;

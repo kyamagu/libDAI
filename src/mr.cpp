@@ -27,19 +27,18 @@ namespace dai {
 using namespace std;
 
 
-const char *MR::Name = "MR";
-
-
 void MR::setProperties( const PropertySet &opts ) {
     DAI_ASSERT( opts.hasKey("tol") );
-    DAI_ASSERT( opts.hasKey("verbose") );
     DAI_ASSERT( opts.hasKey("updates") );
     DAI_ASSERT( opts.hasKey("inits") );
 
     props.tol = opts.getStringAs<Real>("tol");
-    props.verbose = opts.getStringAs<size_t>("verbose");
     props.updates = opts.getStringAs<Properties::UpdateType>("updates");
     props.inits = opts.getStringAs<Properties::InitType>("inits");
+    if( opts.hasKey("verbose") )
+        props.verbose = opts.getStringAs<size_t>("verbose");
+    else
+        props.verbose = 0;
 }
 
 
@@ -344,11 +343,6 @@ Real MR::calcCavityCorrelations() {
 }
 
 
-string MR::identify() const {
-    return string(Name) + printProperties();
-}
-
-
 Real MR::run() {
     if( supported ) {
         if( props.verbose >= 1 )
@@ -368,7 +362,7 @@ Real MR::run() {
         calcMagnetizations();
 
         if( props.verbose >= 1 )
-            cerr << Name << " needed " << toc() - tic << " seconds." << endl;
+            cerr << name() << " needed " << toc() - tic << " seconds." << endl;
 
         return _maxdiff;
     } else
@@ -385,6 +379,18 @@ Factor MR::beliefV( size_t i ) const {
         return Factor( var(i), x );
     } else
         return Factor();
+}
+
+    
+Factor MR::belief (const VarSet &ns) const {
+    if( ns.size() == 0 )
+        return Factor();
+    else if( ns.size() == 1 )
+        return beliefV( findVar( *(ns.begin()) ) );
+    else {
+        DAI_THROW(BELIEF_NOT_AVAILABLE);
+        return Factor();
+    }
 }
 
 

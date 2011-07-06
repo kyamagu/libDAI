@@ -1,6 +1,7 @@
 git sparse
 ----------
 
+* Fixed bugs in MF, FBP and TRWBP (sparse default values sometimes became NaN)
 * Moved Prob::NormType outside of the Prob class (into include/dai/util.h):
     Prob::NormType -> NormType
     TProbSp<T,spvector_type> -> NormType
@@ -28,103 +29,301 @@ git sparse
 git master
 ----------
 
-TODO:
-* Write unit tests for newly added functions
+* Jerome Maye found a bug in the State() class in index.h; implemented
+  a workaround for the moment
+* Fixed bug in findMaximum(): inconsistent max-beliefs are now detected,
+  instead of returning a MAP state with zero joint probability
+  (reported by Hynek Urban)
+* Fixed a Boost-related bug in src/util.cpp (reported by Avneesh Saluja)
+  (the random seed needs to be an unsigned int on some platforms)
+* Fixed two bugs in examples/example_sprinkler_gibbs (reported by Priya)
+* Fixed bug in tokenizeString() and Evidence::addEvidenceTabFile()
+  (a tab character at the end of a line was incorrectly discarded - bug reported by Priya)
+* Replaced all Name members by name() virtual functions and removed global variable DAINames
+  (this fixes a bug in matlab/dai.cpp reported by Thomas Mensink)
 
-* Fixed some bugs in the MatLab interface build system
-* Fixed a bug in utils/fginfo.cpp
-* Improved factor.h/cpp:
-  - Fixed bug in min( const TFactor<T> &, const TFactor<T> & )
-  - Fixed bug in max( const TFactor<T> &, const TFactor<T> & )
-  - Added TFactor<T>::takeAbs()
-  - Added TFactor<T>::takeExp()
-  - Added TFactor<T>::takeLog( bool )
-  - Added TFactor<T>::operator-() const
-  - Added TFactor<T>::sumAbs() const
-  - Added TFactor<T>::operator=( const TFactor<T> &y )
-  - Renamed TFactor<T>::states() into TFactor<T>::nrStates()
-  - Added get(size_t) and set(size_t,T) operators; get() is 
-    equivalent to "operator[](size_t) const" and set() should
-    be used instead of the non-const operator[], which has been deprecated
-* Improved prob.h/cpp:
-  - Deprecated TProb::TProb( TIterator begin, TIterator end, size_t sizeHint=0 )
-    constructor: the sizeHint argument no longer defaults to 0
-  - Deprecated TProb::accumulate( T init, binOp op1, unOp op2 );
-    instead, TProb::accumulateSum( T init, unOp op ) and
-    TProb::accumulateMax( T init, unOp op, bool minimize ) should be used.
-  - Deprecated TProb::NormType and TProb::DistType;
-    ProbNormType and ProbDistType should be used instead.
-  - Added TProb<T>::operator==( const TProb<T> &q )
-  - TProb<T>::accumulate() now also applies op2 to init
-  - Fixed bug by renaming TProb<T>::operator<=() to TProb<T>::operator<()
-  - TProb<T>& operator/= (T x) now yields 0 when dividing by 0
+
+libDAI-0.2.7 (2010-08-19)
+-------------------------
+
+* Removed interfaces deprecated in 0.2.6.
+* Fixed a bug in JTree::findMaximum() (reported by zhengyun84 and Dhruv Batra):
+  if one or more variables had a MAP belief with more than one maximum, an 
+  incorrect MAP state could result.
+
+
+libDAI-0.2.6 (2010-08-05)
+-------------------------
+
+New features:
+* Added decimation algorithm DecMAP for MAP inference (decmap.h/cpp).
+* Added source code for one of the winning solvers of the 
+  UAI 2010 Approximate Inference Challenge (examples/uai2010-aie-solver.cpp).
+* Added support for reading files in the UAI Approximate Inference Challenge
+  format, supporting both the 2006/2008 evidence file format and the 2010
+  evidence file format (io.h/cpp).
+
+Miscellaneous improvements:
+* 'maxtime' property added to various algorithms (BP, Gibbs, HAK, TreeEP)
+  for setting an upper limit on execution time.
+* 'maxmem' property added to JTree for setting an upper limit on memory usage.
+* SmallSet:
+  - Added SmallSet::erase( const T& t ).
+* VarSet:
+  - nrStates() now returns a long double instead of a size_t.
+* Permute:
+  - Added ranges() accessor.
+  - Added inverse() method.
+  - Added optional reverse argument to Permute( const std::vector<Var>& ) constructor.
+* Factor:
+  - Added createFactorDelta( const VarSet& vs, size_t state ).
+* ClusterGraph:
+  - Added ClusterGraph(const FactorGraph& fg, bool onlyMaximal) constructor.
+  - Added findCluster( const VarSet& cl ).
+  - Added elimVar( size_t i ).
+  - Added 'maxStates' argument to VarElim( EliminationChoice f, size_t maxStates=0 ).
+* FactorGraph:
+  - Added isMaximal(size_t).
+  - Added maximalFactor(size_t).
+  - Added FactorGraph::logScore( const std::vector<size_t>& statevec ).
+* Gibbs:
+  - Added 'restart' property.
+  - Added Gibbs::findMaximum() for MAP inference.
+* HAK:
+  - Optimized region graph construction for HAK/GBP with clusters=BETHE.
+* examples/examples_imagesegmentation.cpp:
+  - [Peter Rockett] Improved Makefiles for image segmentation example.
+  - Added build flag to specify the CImg version.
+* util.h/cpp:
+  - Added fromString<>( const std::string& x ).
+
+Interface changes (the old interface is marked obsolete and will be removed in the next release):
+* Added InfAlg::setMaxIter(size_t) for setting the maximum number of iterations.
+* Deprecated Graph::Neighbor, BipartiteGraph::Neighbor and DAG::Neighbor
+  and replaced them by a globally defined Neighbor structure
+* Deprecated Graph::Neighbors, BipartiteGraph::Neighbors and DAG::Neighbors
+  and replaced them by a globally defined Neighbors type
+* Deprecated Graph::Edge, BipartiteGraph::Edge and DAG::Edge
+  and replaced them by a globally defined Edge type
+* Renamed 'iters' property of Gibbs algorithm into 'maxiter'.
+* ClusterGraph::findVar( const Var& n ) no longer throws an exception if the
+  variable is not found.
+* Deprecated 'void tokenizeString( const string&, vector<string>&, const string& )'
+  and replaced it with an improved version
+  'vector<string> tokenizeString( const string&, bool, const string& )'
+* Removed interfaces deprecated in 0.2.5.
+
+Bug fixes:
+* Fixed a problem with isnan() on FreeBSD; it is now in the dai namespace.
+* Workaround for older g++ compilers (e.g. version 4.0.0 on Darwin 9.8.0)
+  which have problems when comparing const_reverse_iterator with
+  reverse_iterator.
+* [Matt Dunham] Fixed a bug in Factors2mx in src/matlab/matlab.cpp
+  (segfault if factors depending on 0 variables were passed to MatLab)
+
+
+libDAI-0.2.5 (2010-05-09)
+-------------------------
+
+New features:
+* Added unit tests for var, smallset, varset, graph, dag, bipgraph,
+  weightedgraph, enum, util, exceptions, properties, index, prob, 
+  factor, factorgraph, clustergraph, regiongraph, daialg, alldai
+* [Ofer Meshi] Added a script for converting from FastInf to libDAI format
+* Added utils/uai2fg, a utility to convert the UAI inference competition file
+  formats to the libDAI factor graph file format
+* Added dag.h/cpp, an implementation of Directed Acyclic Graphs
+* Added examples/example_imagesegmentation
+
+Miscellaneous improvements:
+* TRWBP:
+  - Added initialization of TRWBP weights by sampling spanning trees
+* MF:
+  - Added an "init" option that allows to initialize randomly
+  - Added an "updates" option that allows to choose between standard
+    mean field and "hard-spin" mean field
+* MR:
+  - rewrote response propagation implementation with help of BBP
+  - now uses GraphAL to represent the Markov graph
+  - miscellaneous smaller cleanups
+* TreeEP:
+  - Now also supports disconnected factor graphs
+* JTree:
+  - Now also supports disconnected factor graphs
+* ExactInf:
+  - Added findMaximum()
+* RegionGraph:
+  - Added error checking code
+  - Changed the way a RegionGraph is streamed to an std::ostream.
+* ClusterGraph:
+  - Added nrVars() method
+  - Added var( size_t ) method
+  - Added cluster( size_t ) method
+* FactorGraph:
+  - clamped() now contains a delta factor for the clamped variable
+  - Added MarkovGraph()
+* TFactor:
+  - Added takeAbs()
+  - Added takeExp()
+  - Added takeLog( bool )
+  - Added operator-() const
+  - Added sumAbs() const
+  - Added operator==( const TFactor<T> &y )
+  - Added get(size_t), set(size_t,T)
+* TProb:
+  - Added operator==( const TProb<T> &q )
+  - accumulate() now also applies op2 to init
+  - operator/= (T x) now yields 0 when dividing by 0
+  - Added resize(size_t)
+  - Added get(size_t) and set(size_t,T) 
   - Changed format of TProb<T> when streamed to an ostream
-  - Added get(size_t) and set(size_t,T) operators; get() is 
-    equivalent to "operator[](size_t) const" and set() should
-    be used instead of the non-const operator[], which has been deprecated
-  - Added TProb<T>::resize(size_t)
-* Improved index.h/cpp:
-  - Added multifor::reset()
-* Improved properties.h/cpp:
-  - Renamed PropertySet::Set() -> PropertySet::set()
-  - Renamed PropertySet::Get() -> PropertySet::get()
-  - Renamed PropertySet::GetAs<T>() -> PropertySet::getAs<T>()
-  - Renamed PropertySet::ConvertTo<T>() -> PropertySet::convertTo<T>()
-  - Added PropertySet::size()
-  - Added PropertySet::clear()
-  - Added PropertySet::erase()
-  - Fixed bug in PropertySet::setAsString<T>()
-* Improved util.h/cpp:
-  - Fixed a bug in rnd_seed()
-  - Removed Real max( const std::vector<Real> &v )
-* Improved weightedgraph.h/cpp:
-  - Renamed MaxSpanningTreePrims into MaxSpanningTree
-  - Renamed MinSpanningTreePrims into MinSpanningTree
+* multifor:
+  - Added reset()
+* PropertySet:
+  - Added size()
+  - Added clear()
+  - Added erase()
+* util.h/cpp:
+  - Added std::string toString( const T& x )
+* weightedgraph.h/cpp:
   - Added option to MaxSpanningTree and MinSpanningTree for
     choosing between Prim's algorithm and Kruskal's algorithm
-  - More error checking in RootedTree constructor
+  - Better error checking in RootedTree constructor
+  - Added GraphEL::GraphEL( const GraphAL& G ) constructor
+* BipartiteGraph:
+  - Added hasEdge()
+  - Added findNb1()
+  - Added findNb2()
+  - Added nb1Set()
+  - Added nb2Set()
+  - Added operator==( const BipartiteGraph& )
+  - Added BipartiteGraph( size_t nr1, size_t nr2 ) constructor
+  - Added operator<<( std::ostream&, const BipartiteGraph& )
+* GraphAL:
+  - Added hasEdge(size_t,size_t)
+  - Added nbSet(size_t)
+  - Added operator==( const GraphAL& )
+  - Added operator<<( std::ostream&, const GraphAL& )
+* SmallSet:
+  - Added insert( const T& t ) method
+* Improved regression test
+* Made all "verbose" properties optional
+* utils/createfg now has a new factor type ('ISINGUNIFORM') and the old
+  'ISING' factor type has been renamed to 'ISINGGAUSS'
+* tests/testdai option "marginals" now has five possible values: NONE
+  outputs no marginals, VAR only variable marginals, FAC only factor
+  marginals, VARFAC both types of marginals, and ALL outputs all
+  marginals calculated by the algorithm.
+* Compressed Makefile
+
+Interface changes (the old interface is marked obsolete and will be removed in the next release):
+* Removed RandomDRegularGraph(), please use createGraphRegular() instead
+* TreeEP:
+  - Changed construct( const RootedTree& ) into
+    construct( const FactorGraph&, const RootedTree& )
+* JTree:
+  - Changed construct( const std::vector<VarSet>&, bool ) into
+    construct( const FactorGraph&, const std::vector<VarSet>&, bool )
+  - Changed GenerateJT( const std::vector<VarSet> & )
+    into GenerateJT( const FactorGraph &, const std::vector<VarSet> & )
+* RegionGraph: 
+  - Made (previously public) members G, ORs, IRs and fac2OR protected and
+    added DAG() accessor which returns a reference to the region graph DAG 
+    structure (currently implemented as a BipartiteGraph).
+  - Renamed calcCountingNumbers() into calcCVMCountingNumbers() and made it 
+    protected, because exposing it to the world serves no purpose.
+  - Removed partial constructor RegionGraph( const FactorGraph& fg )
+  - Made RecomputeORs(), RecomputeORs( const VarSet& ) and RecomputeOR( size_t ) 
+    protected and renamed them by changing the "Recompute" into "recompute", 
+    because exposing them to the world serves no purpose.
+* ClusterGraph:
+  - Made (previously public) members G, vars and clusters private and added 
+    bipGraph(), vars() and clusters() methods which offer read-only access 
+    to these members.
+  - Deprecated toVector()
+  - Renamed size() into nrClusters()
+* FactorGraph:
+  - Renamed Cliques() into maximalFactorDomains() and made it faster
+  - findVars( const VarSet& ) now returns a SmallSet<size_t>
+    and its argument now has a const-qualifier (which fixes a small bug).
+  - Made (previously public) member G private and added the 
+    bipGraph() method, which offers read-only access to it.
+  - Deprecated the iterator interface:
+    o FactorGraph::iterator typedef
+    o FactorGraph::const_iterator typedef
+    o FactorGraph::begin() members
+    o FactorGraph::end() members
+  - Deprecated factor(size_t) which offered write access to a factor
+    because using this functionality in the descendant RegionGraph is dangerous,
+    as the outer regions are not automatically recomputed.
+* TFactor:
+  - Renamed states() into nrStates()
+  - Added get(size_t) and set(size_t,T) operators; 
+    get() is equivalent to "operator[](size_t) const" and set() should
+    be used instead of the non-const operator[], which has been deprecated
+* TProb:
+  - Deprecated TProb( TIterator begin, TIterator end, size_t sizeHint=0 )
+    constructor: the sizeHint argument no longer defaults to 0
+  - Deprecated accumulate( T init, binOp op1, unOp op2 );
+    instead, accumulateSum( T init, unOp op ) and
+    accumulateMax( T init, unOp op, bool minimize ) should be used.
+  - Deprecated TProb::NormType and TProb::DistType;
+    ProbNormType and ProbDistType should be used instead.
+  - Fixed bug by renaming operator<=() to operator<()
+  - Added get(size_t) and set(size_t,T) operators; 
+    get() is equivalent to "operator[](size_t) const" and set() should
+    be used instead of the non-const operator[], which has been deprecated
+* PropertySet:
+  - Renamed Set() -> set()
+  - Renamed Get() -> get()
+  - Renamed GetAs<T>() -> getAs<T>()
+  - Renamed ConvertTo<T>() -> convertTo<T>()
+* util.h/cpp:
+  - Removed max( const std::vector<Real> &v )
+* weightedgraph.h/cpp:
+  - Renamed MaxSpanningTreePrims into MaxSpanningTree
+  - Renamed MinSpanningTreePrims into MinSpanningTree
   - The vertices in DEdge and UEdge are now named "first" and "second"
     for compatibility with a std::pair<size_t,size_t>
-  - Added GraphEL( const GraphAL& G ) constructor
-* Improved bipgraph.h/cpp:
-  - Fixed bug in BipartiteGraph::eraseNode1()
-  - Fixed bug in BipartiteGraph::eraseNode2()
-  - Fixed bug in BipartiteGraph::isTree()
-  - Added BipartiteGraph::hasEdge()
-  - Added BipartiteGraph::findNb1()
-  - Added BipartiteGraph::findNb2()
-  - BipartiteGraph::delta1() and BipartiteGraph::delta2() now 
-    return a SmallSet<size_t> instead of a vector<size_t>
-* Improved graph.h/cpp:
-  - Fixed bug in GraphAL::nrEdges()
-  - Fixed bug in GraphAL::addEdge()
-  - Fixed bug in GraphAL::isTree()
-  - Fixed bug in GraphAL::eraseNode()
-  - Fixed bug in GraphAL::printDot()
-  - Fixed bug in createGraphGrid3D()
-  - Fixed bug in createGraphRegular()
-  - Added GraphAL::hasEdge(size_t,size_t)
-* Improved smallset.h/cpp:
+* BipartiteGraph:
+  - delta1() and delta2() now return a SmallSet<size_t> instead of a vector<size_t>
+* SmallSet:
   - The sizeHint argument of the iterator constructor
      SmallSet::SmallSet( TIterator begin, TIterator end, size_t sizeHint=0 )
     no longer has a default value in order to avoid confusion with the
      SmallSet::SmallSet( const T &t1, const T &t2 )
     constructor.
-* Removed RandomDRegularGraph(), please use createGraphRegular() instead
-* Compressed Makefile
-* Added unit tests for var, smallset, varset, graph, bipgraph,
-  weightedgraph, enum, util, properties, index, prob, factor
-* Added unit testing framework
-* Added initialization of TRWBP weights by sampling spanning trees
-* Cleaned up MR code:
-  - rewrote response propagation implementation with help of BBP
-  - now uses GraphAL to represent the Markov graph
-  - miscellaneous smaller cleanups
+
+Bug fixes:
+* [Stefano Pellegrini] Fixed bug in JTree::findMaximum()
+* [Stefano Pellegrini] Fixed bug in BP[logdomain=1,inference=MAXPROD]
+* Fixed some bugs in the MatLab interface build system
+* Fixed a bug in utils/fginfo.cpp
+* Fixed a bug in JTree::findMaximum() and simplified the code
 * Fixed bug in BBPCostFunction::operator=() which prevented the desired 
   assignment from happening
-* [Stefano Pellegrini] Fixed bug in BP[logdomain=1,inference=MAXPROD]
-* Removed deprecated functionality
-* Updated ChangeLog for libDAI-0.2.4 (forgot a few entries)
+* RegionGraph::WriteToFile( const char* ), RegionGraph::ReadFromFile( const char * )
+  and RegionGraph::printDot( std::ostream& ) incorrectly called their respective
+  FactorGraph ancestor methods; this has been corrected by letting them throw a
+  NOT_IMPLEMENTED exception.
+* Fixed bug in FactorGraph::clone()
+* Fixed bug in min( const TFactor<T> &, const TFactor<T> & )
+* Fixed bug in max( const TFactor<T> &, const TFactor<T> & )
+* Fixed bug by renaming TProb<T>::operator<=() to TProb<T>::operator<()
+* Fixed bug in PropertySet::setAsString<T>()
+* Fixed a bug in rnd_seed()
+* BipartiteGraph:
+  - Fixed bug in eraseNode1()
+  - Fixed bug in eraseNode2()
+  - Fixed bug in isTree()
+* GraphAL:
+  - Fixed bug in nrEdges()
+  - Fixed bug in addEdge()
+  - Fixed bug in isTree()
+  - Fixed bug in eraseNode()
+  - Fixed bug in printDot()
+* Fixed bug in createGraphGrid3D()
+* Fixed bug in createGraphRegular()
 
 
 libDAI-0.2.4 (2010-02-11)
@@ -415,9 +614,9 @@ Code cleanup:
 
 Miscellaneous improvements:
 * Now compiles also with MS Visual C++ (thanks to Jiuxiang Hu) and with
-  GCC under cygwin.
+  GCC under Cygwin.
 * Contributions by Peter Gober:
-  - Renamed variable _N in mr.* for compatibility with g++ under cygwin.
+  - Renamed variable _N in mr.* for compatibility with g++ under Cygwin.
 * Misc contributions by Giuseppe Passino:
   - removed "using namespace std;" from header files - bad practice;
   - moved header files in include/dai and sources in src;

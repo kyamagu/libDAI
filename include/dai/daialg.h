@@ -47,8 +47,13 @@ class InfAlg {
 
     /// \name Queries
     //@{
+        /// Returns the name of the algorithm
+        virtual std::string name() const = 0;
+
         /// Identifies itself for logging purposes
-        virtual std::string identify() const = 0;
+        virtual std::string identify() const {
+            return name() + printProperties();
+        }
 
         /// Returns reference to underlying FactorGraph.
         virtual FactorGraph &fg() = 0;
@@ -111,15 +116,26 @@ class InfAlg {
          */
         virtual Real logZ() const = 0;
 
+        /// Calculates the joint state of all variables that has maximum probability
+        /** \note Before this method is called, run() should have been called.
+         *  \throw NOT_IMPLEMENTED if not implemented/supported
+         */
+        virtual std::vector<std::size_t> findMaximum() const { DAI_THROW(NOT_IMPLEMENTED); }
+
         /// Returns maximum difference between single variable beliefs in the last iteration.
         /** \throw NOT_IMPLEMENTED if not implemented/supported
          */
-        virtual Real maxDiff() const = 0;
+        virtual Real maxDiff() const { DAI_THROW(NOT_IMPLEMENTED); };
 
         /// Returns number of iterations done (one iteration passes over the complete factorgraph).
         /** \throw NOT_IMPLEMENTED if not implemented/supported
          */
-        virtual size_t Iterations() const = 0;
+        virtual size_t Iterations() const { DAI_THROW(NOT_IMPLEMENTED); };
+
+        /// Sets maximum number of iterations (one iteration passes over the complete factorgraph).
+        /** \throw NOT_IMPLEMENTED if not implemented/supported
+         */
+        virtual void setMaxIter( size_t /*maxiter*/ ) { DAI_THROW(NOT_IMPLEMENTED); }
     //@}
 
     /// \name Changing the factor graph
@@ -243,6 +259,7 @@ typedef DAIAlg<RegionGraph> DAIAlgRG;
  */
 Factor calcMarginal( const InfAlg& obj, const VarSet& vs, bool reInit );
 
+
 /// Calculates beliefs for all pairs of variables in \a vs using inference algorithm \a obj.
 /** calcPairBeliefs() works by 
  *  - clamping single variables in \a vs and calculating the partition sum and the single variable beliefs for each clamped state, if \a accurate == \c false;
@@ -256,6 +273,12 @@ Factor calcMarginal( const InfAlg& obj, const VarSet& vs, bool reInit );
  *  \param accurate if \c true, uses a slower but more accurate approximation algorithm
  */
 std::vector<Factor> calcPairBeliefs( const InfAlg& obj, const VarSet& vs, bool reInit, bool accurate=false );
+
+
+/// Calculates the joint state of all variables that has maximum probability, according to the inference algorithm \a obj
+/** \note Before this method is called, obj.run() should have been called.
+ */
+std::vector<size_t> findMaximum( const InfAlg& obj );
 
 
 } // end of namespace dai

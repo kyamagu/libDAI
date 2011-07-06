@@ -10,9 +10,6 @@
 
 
 #include <dai/graph.h>
-#include <dai/weightedgraph.h>
-#include <boost/graph/adjacency_list.hpp>
-#include <boost/graph/connected_components.hpp>
 
 
 namespace dai {
@@ -21,7 +18,7 @@ namespace dai {
 using namespace std;
 
 
-void GraphAL::addEdge( size_t n1, size_t n2, bool check ) {
+GraphAL& GraphAL::addEdge( size_t n1, size_t n2, bool check ) {
     DAI_ASSERT( n1 < nrNodes() );
     DAI_ASSERT( n2 < nrNodes() );
     bool exists = false;
@@ -39,6 +36,7 @@ void GraphAL::addEdge( size_t n1, size_t n2, bool check ) {
         nb(n1).push_back( nb_1 );
         nb(n2).push_back( nb_2 );
     }
+    return *this;
 }
 
 
@@ -53,13 +51,10 @@ void GraphAL::eraseNode( size_t n ) {
             if( m.node == n ) {
                 // delete this entry, because it points to the deleted node
                 nb(n2).erase( nb(n2).begin() + iter );
-            } else if( m.node > n ) {
-                // update this entry and the corresponding dual of the neighboring node
-                m.node--;
-                nb( m.node, m.dual ).dual = iter;
-                m.iter = iter++;
             } else {
                 // update this entry and the corresponding dual of the neighboring node
+                if( m.node > n ) 
+                    m.node--;
                 nb( m.node, m.dual ).dual = iter;
                 m.iter = iter++;
             }
@@ -98,6 +93,14 @@ void GraphAL::eraseEdge( size_t n1, size_t n2 ) {
         m.iter = iter;
         nb( m.node, m.dual ).dual = iter;
     }
+}
+
+
+SmallSet<size_t> GraphAL::nbSet( size_t n ) const {
+    SmallSet<size_t> result;
+    foreach( const Neighbor &m, nb(n) )
+        result |= m;
+    return result;
 }
 
 
@@ -203,7 +206,7 @@ bool GraphAL::isTree() const {
 
 
 void GraphAL::printDot( std::ostream& os ) const {
-    os << "graph G {" << endl;
+    os << "graph GraphAL {" << endl;
     os << "node[shape=circle,width=0.4,fixedsize=true];" << endl;
     for( size_t n = 0; n < nrNodes(); n++ )
         os << "\tx" << n << ";" << endl;
@@ -224,16 +227,6 @@ void GraphAL::checkConsistency() const {
             DAI_ASSERT( n2.node < N );
             DAI_ASSERT( n2.dual < nb(n2).size() );
             DAI_ASSERT( nb(n2, n2.dual) == n1 );
-            iter++;
-        }
-    }
-    for( size_t n2 = 0; n2 < N; n2++ ) {
-        size_t iter = 0;
-        foreach( const Neighbor &n1, nb(n2) ) {
-            DAI_ASSERT( n1.iter == iter );
-            DAI_ASSERT( n1.node < N );
-            DAI_ASSERT( n1.dual < nb(n1).size() );
-            DAI_ASSERT( nb(n1, n1.dual) == n2 );
             iter++;
         }
     }
@@ -322,7 +315,7 @@ GraphAL createGraphRegular( size_t N, size_t d ) {
             G = GraphAL( N );
             bool finished = false;
             while( !finished ) {
-                random_shuffle( U.begin(), U.end() );
+                random_shuffle( U.begin(), U.end(), rnd );
                 size_t i1, i2;
                 bool suit_pair_found = false;
                 for( i1 = 0; i1 < U.size()-1 && !suit_pair_found; i1++ )

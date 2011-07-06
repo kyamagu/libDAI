@@ -61,15 +61,15 @@ class TreeEP : public JTree {
             /// Maximum number of iterations
             size_t maxiter;
 
+            /// Maximum time (in seconds)
+            double maxtime;
+
             /// Tolerance for convergence test
             Real tol;
 
             /// How to choose the tree
             TypeType type;
         } props;
-
-        /// Name of this inference method
-        static const char *Name;
 
     private:
         /// Stores the data structures needed to efficiently update the approximation of an off-tree factor.
@@ -175,8 +175,6 @@ class TreeEP : public JTree {
         /// Construct from FactorGraph \a fg and PropertySet \a opts
         /** \param fg Factor graph.
          *  \param opts Parameters @see Properties
-         *  \note The factor graph has to be connected.
-         *  \throw FACTORGRAPH_NOT_CONNECTED if \a fg is not connected
          */
         TreeEP( const FactorGraph &fg, const PropertySet &opts );
 
@@ -184,13 +182,14 @@ class TreeEP : public JTree {
     /// \name General InfAlg interface
     //@{
         virtual TreeEP* clone() const { return new TreeEP(*this); }
-        virtual std::string identify() const;
+        virtual std::string name() const { return "TREEEP"; }
         virtual Real logZ() const;
         virtual void init();
         virtual void init( const VarSet &/*ns*/ ) { init(); }
         virtual Real run();
         virtual Real maxDiff() const { return _maxdiff; }
         virtual size_t Iterations() const { return _iters; }
+        virtual void setMaxIter( size_t maxiter ) { props.maxiter = maxiter; }
         virtual void setProperties( const PropertySet &opts );
         virtual PropertySet getProperties() const;
         virtual std::string printProperties() const;
@@ -198,9 +197,9 @@ class TreeEP : public JTree {
 
     private:
         /// Helper function for constructors
-        void construct( const RootedTree &tree );
+        void construct( const FactorGraph& fg, const RootedTree& tree );
         /// Returns \c true if factor \a I is not part of the tree
-        bool offtree( size_t I ) const { return (fac2OR[I] == -1U); }
+        bool offtree( size_t I ) const { return (fac2OR(I) == -1U); }
 };
 
 
