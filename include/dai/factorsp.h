@@ -73,13 +73,13 @@ class TFactorSp {
         TFactorSp( const Var &v ) : _vs(v), _p(v.states()) {}
 
         /// Constructs factor depending on variables in \a vars with uniform distribution
-        TFactorSp( const VarSet& vars ) : _vs(vars), _p((size_t)_vs.nrStates()) {
-            DAI_ASSERT( _vs.nrStates() <= std::numeric_limits<std::size_t>::max() );
+        TFactorSp( const VarSet& vars ) : _vs(vars), _p() {
+            _p = TProbSp<T,spvector_type>( BigInt_size_t( _vs.nrStates() ) );
         }
 
         /// Constructs factor depending on variables in \a vars with all values set to \a p
-        TFactorSp( const VarSet& vars, T p ) : _vs(vars), _p((size_t)_vs.nrStates(),p) {
-            DAI_ASSERT( _vs.nrStates() <= std::numeric_limits<std::size_t>::max() );
+        TFactorSp( const VarSet& vars, T p ) : _vs(vars), _p() {
+            _p = TProbSp<T,spvector_type>( BigInt_size_t( _vs.nrStates() ), p );
         }
 
         /// Constructs factor depending on variables in \a vars, copying the values from a std::vector<>
@@ -97,8 +97,9 @@ class TFactorSp {
         /** \param vars contains the variables that the new factor should depend on.
          *  \param p Points to array of values to be added.
          */
-        TFactorSp( const VarSet& vars, const T* p ) : _vs(vars), _p(p, p + (size_t)_vs.nrStates(), (size_t)_vs.nrStates()) {
-            DAI_ASSERT( _vs.nrStates() <= std::numeric_limits<std::size_t>::max() );
+        TFactorSp( const VarSet& vars, const T* p ) : _vs(vars), _p() {
+            size_t N = BigInt_size_t( _vs.nrStates() );
+            _p = TProbSp<T,spvector_type>( p, p + N, N );
         }
 
         /// Constructs factor depending on variables in \a vars, copying the values from \a p
@@ -108,7 +109,7 @@ class TFactorSp {
 
         /// Constructs factor depending on variables in \a vars, permuting the values given in \a p accordingly
         TFactorSp( const std::vector<Var> &vars, const std::vector<T> &p ) : _vs(vars.begin(), vars.end(), vars.size()), _p(p.size()) {
-            size_t nrStates = 1;
+            BigInt nrStates = 1;
             for( size_t i = 0; i < vars.size(); i++ )
                 nrStates *= vars[i].states();
             DAI_ASSERT( nrStates == p.size() );
@@ -514,9 +515,9 @@ template<typename T, typename spvector_type> TFactorSp<T,spvector_type> TFactorS
     TFactorSp<T,spvector_type> result( varsrem, p().def() );
     for( typename TProbSp<T,spvector_type>::const_iterator it = p().begin(); it != p().end(); it++ ) {
         State s( _vs, it->first );
-        size_t vars_s = s( vars );
+        size_t vars_s = BigInt_size_t( s( vars ) );
         if( vars_s == varsState )
-            result.set( s(varsrem), it->second );
+            result.set( BigInt_size_t( s(varsrem) ), it->second );
     }
 
     /* SLOW BECAUSE IT ITERATES OVER ALL VALUES */
@@ -544,10 +545,10 @@ template<typename T, typename spvector_type> TFactorSp<T,spvector_type> TFactorS
     DAI_ASSERT( !isnan(p().def()) );
 
     VarSet rem(_vs / res_vars);
-    TFactorSp<T,spvector_type> result( res_vars, rem.nrStates() * p().def() );
+    TFactorSp<T,spvector_type> result( res_vars, rem.nrStates().get_d() * p().def() );
     for( typename TProbSp<T,spvector_type>::const_iterator it = p().begin(); it != p().end(); it++ ) {
         State s(_vs, it->first);
-        size_t res_vars_s = s( res_vars );
+        size_t res_vars_s = BigInt_size_t( s( res_vars) );
         result.set( res_vars_s, result[res_vars_s] - p().def() + it->second );
     }
 
@@ -578,7 +579,7 @@ template<typename T, typename spvector_type> TFactorSp<T,spvector_type> TFactorS
     TFactorSp<T,spvector_type> result( res_vars, p().def() );
     for( typename TProbSp<T,spvector_type>::const_iterator it = p().begin(); it != p().end(); it++ ) {
         State s( _vs, it->first );
-        size_t res_vars_s = s( res_vars );
+        size_t res_vars_s = BigInt_size_t( s( res_vars ) );
         if( it->second > result[res_vars_s] )
             result.set( res_vars_s, it->second );
     }
@@ -671,7 +672,7 @@ template<typename T, typename spvector_type, typename binaryOp> TFactorSp<T,spve
                     if( compatible ) {
                         State fgs = fs;
                         fgs.insert( gs.begin(), gs.end() );
-                        result.set( fgs(un), op( fit->second, git->second ) );
+                        result.set( BigInt_size_t(fgs(un)), op( fit->second, git->second ) );
                     }
                 }
             }
@@ -682,7 +683,7 @@ template<typename T, typename spvector_type, typename binaryOp> TFactorSp<T,spve
                 for( State g_minus_f_s(g.vars() / f.vars()); g_minus_f_s.valid(); g_minus_f_s++ ) {
                     State fgs = g_minus_f_s.get();
                     fgs.insert( fs.begin(), fs.end() );
-                    result.set( fgs(un), op( fit->second, g[fgs(g.vars())] ) );
+                    result.set( BigInt_size_t(fgs(un)), op( fit->second, g[BigInt_size_t(fgs(g.vars()))] ) );
                 }
             }
             // For all states of f and all non-default states of g
@@ -691,7 +692,7 @@ template<typename T, typename spvector_type, typename binaryOp> TFactorSp<T,spve
                 for( State f_minus_g_s(f.vars() / g.vars()); f_minus_g_s.valid(); f_minus_g_s++ ) {
                     State fgs = f_minus_g_s.get();
                     fgs.insert( gs.begin(), gs.end() );
-                    result.set( fgs(un), op( f[fgs(f.vars())], git->second ) );
+                    result.set( BigInt_size_t(fgs(un)), op( f[BigInt_size_t(fgs(f.vars()))], git->second ) );
                 }
             }
         }
