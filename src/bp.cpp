@@ -27,6 +27,7 @@ using namespace std;
 #else
 #define DAI_BP_FAST 1
 #endif
+/// \todo Make DAI_BP_FAST a compile-time choice, as it is a memory/speed tradeoff
 
 
 void BP::setProperties( const PropertySet &opts ) {
