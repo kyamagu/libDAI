@@ -13,7 +13,7 @@ include Makefile.conf
 
 # Set version and date
 DAI_VERSION="git HEAD"
-DAI_DATE="July 12, 2011 - or later"
+DAI_DATE="September 17, 2012 - or later"
 
 # Directories of libDAI sources
 # Location of libDAI headers
@@ -41,7 +41,7 @@ ifdef WITH_DOC
 endif
 
 # Define conditional build targets
-NAMES:=graph dag bipgraph varset daialg alldai clustergraph factor factorgraph properties regiongraph util weightedgraph exceptions exactinf evidence emalg io
+NAMES:=graph dag bipgraph varset daialg alldai clustergraph factor factorgraph properties regiongraph cobwebgraph util weightedgraph exceptions exactinf evidence emalg io
 ifdef WITH_BP
   WITHFLAGS:=$(WITHFLAGS) -DDAI_WITH_BP
   NAMES:=$(NAMES) bp
@@ -90,6 +90,10 @@ ifdef WITH_DECMAP
   WITHFLAGS:=$(WITHFLAGS) -DDAI_WITH_DECMAP
   NAMES:=$(NAMES) decmap
 endif
+ifdef WITH_GLC
+  WITHFLAGS:=$(WITHFLAGS) -DDAI_WITH_GLC
+  NAMES:=$(NAMES) glc 
+endif
 ifdef DAI_SPARSE
   WITHFLAGS:=$(WITHFLAGS) -DDAI_SPARSE=$(DAI_SPARSE)
 endif
@@ -113,7 +117,7 @@ ifdef NEW_MATLAB
 else
   MEXFLAGS:=$(MEXFLAGS) -DSMALLMEM
 endif
-MEX:=$(MEX) $(MEXINC) $(MEXFLAGS) $(WITHFLAGS) $(MEXLIB)
+MEX:=$(MEX) $(MEXINC) $(MEXFLAGS) $(WITHFLAGS) $(MEXLIBS) $(MEXLIB)
 
 
 # META TARGETS
@@ -132,7 +136,7 @@ ifdef WITH_CIMG
 endif
 examples : $(EXAMPLES)
 
-matlabs : matlab/dai$(ME) matlab/dai_readfg$(ME) matlab/dai_writefg$(ME) matlab/dai_potstrength$(ME)
+matlabs : matlab/dai$(ME) matlab/dai_readfg$(ME) matlab/dai_writefg$(ME) matlab/dai_potstrength$(ME) matlab/dai_jtree$(ME)
 
 unittests : tests/unit/var_test$(EE) tests/unit/smallset_test$(EE) tests/unit/varset_test$(EE) tests/unit/graph_test$(EE) tests/unit/dag_test$(EE) tests/unit/bipgraph_test$(EE) tests/unit/weightedgraph_test$(EE) tests/unit/enum_test$(EE) tests/unit/enum_test$(EE) tests/unit/util_test$(EE) tests/unit/exceptions_test$(EE) tests/unit/properties_test$(EE) tests/unit/index_test$(EE) tests/unit/prob_test$(EE) tests/unit/factor_test$(EE) tests/unit/factorgraph_test$(EE) tests/unit/clustergraph_test$(EE) tests/unit/regiongraph_test$(EE) tests/unit/daialg_test$(EE) tests/unit/alldai_test$(EE)
 	@echo 'Running unit tests...'
@@ -194,6 +198,9 @@ emalg$(OE) : $(SRC)/emalg.cpp $(INC)/emalg.h $(INC)/evidence.h $(HEADERS)
 decmap$(OE) : $(SRC)/decmap.cpp $(INC)/decmap.h $(HEADERS)
 	$(CC) -c $<
 
+glc$(OE) : $(SRC)/glc.cpp $(INC)/glc.h $(HEADERS) $(INC)/cobwebgraph.h
+	$(CC) -c $<
+
 
 # EXAMPLES
 ###########
@@ -252,6 +259,9 @@ matlab/dai_writefg$(ME) : $(SRC)/matlab/dai_writefg.cpp $(HEADERS) $(SRC)/matlab
 
 matlab/dai_potstrength$(ME) : $(SRC)/matlab/dai_potstrength.cpp $(HEADERS) $(SRC)/matlab/matlab.cpp $(SRC)/exceptions.cpp
 	$(MEX) -output $@ $< $(SRC)/matlab/matlab.cpp $(SRC)/exceptions.cpp
+
+matlab/dai_jtree$(ME) : $(SRC)/matlab/dai_jtree.cpp $(HEADERS) $(SOURCES) $(SRC)/matlab/matlab.cpp
+	$(MEX) -output $@ $< $(SRC)/matlab/matlab.cpp $(SOURCES)
 
 
 # UTILS

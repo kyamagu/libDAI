@@ -26,7 +26,7 @@ OE=.o
 # Binary executable
 EE=
 # MatLab compiled MEX file
-ME=.mexglx
+ME=.mexa64
 
 # COMPILER
 # Compile using GNU C++ Compiler
@@ -55,14 +55,15 @@ CCLIB=-Llib
 # MatLab version 7.3 (R2006b) or newer?
 NEW_MATLAB=true
 # Replace the following by the directory where MatLab has been installed
-MATLABDIR=/agbs/share/sw/matlab
+MATLABDIR=/opt/Matlab-R2010b
 # The following should resolve to the MatLab mex compile command
 MEX=$(MATLABDIR)/bin/mex
 # Specify the C++ compiler and flags for MEX
-# (MatLab R2008b only works with older versions of g++)
-MEXFLAGS:=CXX\#g++-4.1 CXXFLAGS\#'$(CCFLAGS)'
+MEXFLAGS:=CXX\#$(CC) CXXFLAGS\#'$(CCFLAGS)'
 # Standard include directories for MEX
 MEXINC:=$(CCINC)
+# Standard libraries to include
+MEXLIBS=-lgmpxx -lgmp
 # Additional library search paths for MEX
 MEXLIB=
 
@@ -70,7 +71,7 @@ MEXLIB=
 # The following should resolve to the SWIG command
 SWIG=swig
 # Location of Python header files
-INCLUDE_PYTHON=/usr/include/python2.5
+INCLUDE_PYTHON=/usr/include/python2.7
 # Location of Boost C++ library header files
 INCLUDE_BOOST=/usr/include/boost
 

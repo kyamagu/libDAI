@@ -213,13 +213,24 @@ std::vector<size_t> findMaximum( const InfAlg& obj ) {
     vector<bool> visitedVars( obj.fg().nrVars(), false );
     vector<bool> visitedFactors( obj.fg().nrFactors(), false );
     stack<size_t> scheduledFactors;
-    scheduledFactors.push( 0 );
-    while( !scheduledFactors.empty() ) {
+    size_t nrVisitedFactors = 0;
+    size_t firstUnvisitedFactor = 0;
+    while( nrVisitedFactors < obj.fg().nrFactors() ) {
+        if( scheduledFactors.size() == 0 ) {
+            while( visitedFactors[firstUnvisitedFactor] ) {
+                firstUnvisitedFactor++;
+                if( firstUnvisitedFactor >= obj.fg().nrFactors() )
+                    DAI_THROWE(RUNTIME_ERROR,"Internal error in findMaximum()");
+            }
+            scheduledFactors.push( firstUnvisitedFactor );
+        }
+            
         size_t I = scheduledFactors.top();
         scheduledFactors.pop();
         if( visitedFactors[I] )
             continue;
         visitedFactors[I] = true;
+        nrVisitedFactors++;
 
         // Get marginal of factor I
         Prob probF = obj.beliefF(I).p();
@@ -233,7 +244,7 @@ std::vector<size_t> findMaximum( const InfAlg& obj ) {
             // First, calculate whether this state is consistent with variables that
             // have been assigned already
             bool allowedState = true;
-            foreach( const Neighbor &j, obj.fg().nbF(I) )
+            bforeach( const Neighbor &j, obj.fg().nbF(I) )
                 if( visitedVars[j.node] && maximum[j.node] != s(obj.fg().var(j.node)) ) {
                     allowedState = false;
                     break;
@@ -253,7 +264,7 @@ std::vector<size_t> findMaximum( const InfAlg& obj ) {
         DAI_ASSERT( obj.fg().factor(I).p()[maxState] != 0.0 );
 
         // Decode the argmax
-        foreach( const Neighbor &j, obj.fg().nbF(I) ) {
+        bforeach( const Neighbor &j, obj.fg().nbF(I) ) {
             if( visitedVars[j.node] ) {
                 // We have already visited j earlier - hopefully our state is consistent
                 if( maximum[j.node] != maxState( obj.fg().var(j.node) ) )
@@ -262,7 +273,7 @@ std::vector<size_t> findMaximum( const InfAlg& obj ) {
                 // We found a consistent state for variable j
                 visitedVars[j.node] = true;
                 maximum[j.node] = maxState( obj.fg().var(j.node) );
-                foreach( const Neighbor &J, obj.fg().nbV(j) )
+                bforeach( const Neighbor &J, obj.fg().nbV(j) )
                     if( !visitedFactors[J] )
                         scheduledFactors.push(J);
             }

@@ -24,6 +24,10 @@
 #include <boost/lexical_cast.hpp>
 #include <algorithm>
 #include <cerrno>
+
+#if defined(WINDOWS)
+#include <cstdint> // only defined in C++11 and higher, but needed for Win64 builds in order to enable conditional code in MPIR library
+#endif
 #include <gmpxx.h>
 
 #include <dai/exceptions.h>
@@ -40,8 +44,8 @@
 #endif
 
 
-/// An alias to the BOOST_FOREACH macro from the boost::foreach library
-#define foreach BOOST_FOREACH
+/// An alias to the BOOST_FOREACH macro from the boost::bforeach library
+#define bforeach BOOST_FOREACH
 
 #ifdef DAI_DEBUG
 /// \brief "Print variable". Prints the text of an expression, followed by its value (only if DAI_DEBUG is defined)
@@ -71,6 +75,19 @@
 
     /// Define INFINITY
     #define INFINITY (std::numeric_limits<Real>::infinity())
+
+    /// Define NAN
+    #define NAN (std::numeric_limits<Real>::quiet_NaN())
+
+    #if defined(_MSC_VER)
+      // Disable unsafe warning (use of the function 'strcpy' instead of 
+      // 'strcpy_s' for portability reasons;
+      #pragma warning( disable : 4996 )
+      // Workaround for the char16_t type defined in Matlab and MSVC 2010
+      #if (_MSC_VER >= 1600)
+        #define __STDC_UTF_16__
+      #endif
+    #endif
 #endif
 
 
@@ -85,7 +102,7 @@ typedef mpz_class BigInt;
 
 /// Safe down-cast of big integer to size_t
 inline size_t BigInt_size_t( const BigInt &N ) {
-    DAI_ASSERT( N <= std::numeric_limits<std::size_t>::max() );
+    DAI_ASSERT( N <= (BigInt)std::numeric_limits<std::size_t>::max() );
     return N.get_ui();
 }
 

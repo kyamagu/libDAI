@@ -203,8 +203,8 @@ std::istream& operator>> ( std::istream& is, FactorGraph &fg ) {
 VarSet FactorGraph::Delta( size_t i ) const {
     // calculate Markov Blanket
     VarSet Del;
-    foreach( const Neighbor &I, nbV(i) ) // for all neighboring factors I of i
-        foreach( const Neighbor &j, nbF(I) ) // for all neighboring variables j of I
+    bforeach( const Neighbor &I, nbV(i) ) // for all neighboring factors I of i
+        bforeach( const Neighbor &j, nbF(I) ) // for all neighboring variables j of I
             Del |= var(j);
 
     return Del;
@@ -219,11 +219,30 @@ VarSet FactorGraph::Delta( const VarSet &ns ) const {
 }
 
 
+SmallSet<size_t> FactorGraph::Deltai( size_t i ) const {
+    // calculate Markov Blanket
+    SmallSet<size_t> Del;
+    bforeach( const Neighbor &I, nbV(i) ) // for all neighboring factors I of i
+        bforeach( const Neighbor &j, nbF(I) ) // for all neighboring variables j of I
+            Del |= j;
+
+    return Del;
+}
+
+
 void FactorGraph::makeCavity( size_t i, bool backup ) {
     // fills all Factors that include var(i) with ones
     map<size_t,Factor> newFacs;
-    foreach( const Neighbor &I, nbV(i) ) // for all neighboring factors I of i
+    bforeach( const Neighbor &I, nbV(i) ) // for all neighboring factors I of i
         newFacs[I] = Factor( factor(I).vars(), (Real)1 );
+    setFactors( newFacs, backup );
+}
+
+
+void FactorGraph::makeRegionCavity( std::vector<size_t> facInds, bool backup ) {
+    map<size_t,Factor> newFacs;
+    for( size_t I = 0; I < facInds.size(); I++ )
+    	newFacs[facInds[I]] = Factor(factor(facInds[I]).vars(), (Real)1);
     setFactors( newFacs, backup );
 }
 
@@ -260,7 +279,7 @@ void FactorGraph::printDot( std::ostream &os ) const {
     for( size_t I = 0; I < nrFactors(); I++ )
         os << "\tf" << I << ";" << endl;
     for( size_t i = 0; i < nrVars(); i++ )
-        foreach( const Neighbor &I, nbV(i) )  // for all neighboring factors I of i
+        bforeach( const Neighbor &I, nbV(i) )  // for all neighboring factors I of i
             os << "\tv" << var(i).label() << " -- f" << I << ";" << endl;
     os << "}" << endl;
 }
@@ -269,8 +288,8 @@ void FactorGraph::printDot( std::ostream &os ) const {
 GraphAL FactorGraph::MarkovGraph() const {
     GraphAL G( nrVars() );
     for( size_t i = 0; i < nrVars(); i++ )
-        foreach( const Neighbor &I, nbV(i) )
-            foreach( const Neighbor &j, nbF(I) )
+        bforeach( const Neighbor &I, nbV(i) )
+            bforeach( const Neighbor &j, nbF(I) )
                 if( i < j )
                     G.addEdge( i, j, true );
     return G;
@@ -288,8 +307,8 @@ bool FactorGraph::isMaximal( size_t I ) const {
                     return false;
         return true;
     } else {
-        foreach( const Neighbor& i, nbF(I) ) {
-            foreach( const Neighbor& J, nbV(i) ) {
+        bforeach( const Neighbor& i, nbF(I) ) {
+            bforeach( const Neighbor& J, nbV(i) ) {
                 if( J != I )
                     if( (factor(J).vars() >> I_vars) && (factor(J).vars().size() != I_size) )
                         return false;
@@ -311,8 +330,8 @@ size_t FactorGraph::maximalFactor( size_t I ) const {
                     return maximalFactor( J );
         return I;
     } else {
-        foreach( const Neighbor& i, nbF(I) ) {
-            foreach( const Neighbor& J, nbV(i) ) {
+        bforeach( const Neighbor& i, nbF(I) ) {
+            bforeach( const Neighbor& J, nbV(i) ) {
                 if( J != I )
                     if( (factor(J).vars() >> I_vars) && (factor(J).vars().size() != I_size) )
                         return maximalFactor( J );
@@ -359,7 +378,7 @@ void FactorGraph::clamp( size_t i, size_t x, bool backup ) {
     mask.set( x, (Real)1 );
 
     map<size_t, Factor> newFacs;
-    foreach( const Neighbor &I, nbV(i) )
+    bforeach( const Neighbor &I, nbV(i) )
         newFacs[I] = factor(I) * mask;
     setFactors( newFacs, backup );
 
@@ -371,13 +390,13 @@ void FactorGraph::clampVar( size_t i, const vector<size_t> &is, bool backup ) {
     Var n = var(i);
     Factor mask_n( n, (Real)0 );
 
-    foreach( size_t i, is ) {
+    bforeach( size_t i, is ) {
         DAI_ASSERT( i <= n.states() );
         mask_n.set( i, (Real)1 );
     }
 
     map<size_t, Factor> newFacs;
-    foreach( const Neighbor &I, nbV(i) )
+    bforeach( const Neighbor &I, nbV(i) )
         newFacs[I] = factor(I) * mask_n;
     setFactors( newFacs, backup );
 }
@@ -387,7 +406,7 @@ void FactorGraph::clampFactor( size_t I, const vector<size_t> &is, bool backup )
     size_t st = factor(I).nrStates();
     Factor newF( factor(I).vars(), (Real)0 );
 
-    foreach( size_t i, is ) {
+    bforeach( size_t i, is ) {
         DAI_ASSERT( i <= st );
         newF.set( i, factor(I)[i] );
     }

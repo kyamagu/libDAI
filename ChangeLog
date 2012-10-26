@@ -26,10 +26,34 @@ git sparse
     TFactor<T>::TFactor( const VarSet& vars, const T* p )
 
 
-git master
-----------
+git HEAD
+--------
+* Merged Generalized Loop Correction code kindly provided by Siamak Ravanbakhsh
+
+
+libDAI-0.3.1 (2012-09-17)
+-------------------------
+
+Miscellaneous improvements:
+* Full 64-bit support on all supported platforms (Linux, OSX, Windows)
+* Added special MatLab interface for junction tree algorithm (dai_jtree)
+>>>>>>> master
 * Optimized ClusterGraph( const FactorGraph&, bool) constructor
-* Fixed "typename" bug in src/alldai.cpp which resulted in FTBFS for older g++ compilers
+
+Build system improvements:
+* Added Makefile.WINDOWS64, kindly provided by Lin Ming
+* [Arman Aksoy] Added Makefile.MACOSX64
+* Added VC10 build files, kindly provided by Sameh Khamis
+
+Bug fixes:
+* Fixed bug (found by Sameh Khamis): define NAN (Windows)
+* Fixed bug (found by Sameh Khamis): add some necessary casts of size_t to BigInt (Windows)
+* Fixed bug (found by Yan): replaced GNU extension __PRETTY_FUNCTION__ by __FUNCTION__ (Visual Studio) or __func__ (other compilers)
+* Fixed bug (found by Andy Mueller): added GMP library invocations to swig Makefile
+* Fixed bug (found by cax): when building MatLab MEX files, GMP/MPIR libraries were not linked
+* Fixed bug in findMaximum (it only considered a single connected component of the factor graph)
+* [Benjamin Piwowarski] Renamed "foreach" macro into "bforeach" to avoid conflicts with newer Boost library versions
+* Fixed "typename" bug in src/alldai.cpp which resulted in FTBFS with older g++ compilers
 * Fixed memory leak in alldai.cpp and removed the function builtinInfAlgs()
 * Fixed memory leak in CBP::run()
 * Fixed typo in Priya's name
