@@ -18,27 +18,27 @@
 # COMPILATION AND BUILD FLAGS
 
 # Enable/disable various approximate inference methods
-WITH_BP=true
-WITH_FBP=true
-WITH_TRWBP=true
-WITH_MF=true
-WITH_HAK=true
-WITH_LC=true
-WITH_TREEEP=true
-WITH_JTREE=true
-WITH_MR=true
-WITH_GIBBS=true
-WITH_CBP=true
-WITH_DECMAP=true
+WITH_BP?=true
+WITH_FBP?=true
+WITH_TRWBP?=true
+WITH_MF?=true
+WITH_HAK?=true
+WITH_LC?=true
+WITH_TREEEP?=true
+WITH_JTREE?=true
+WITH_MR?=true
+WITH_GIBBS?=true
+WITH_CBP?=true
+WITH_DECMAP?=true
 
 # Build with debug info? (slower but safer)
-DEBUG=true
+DEBUG?=true
 
 # Build doxygen documentation? (doxygen and TeX need to be installed)
-WITH_DOC=
+WITH_DOC?=
 
 # Build MatLab interface? (MatLab needs to be installed)
-WITH_MATLAB=
+WITH_MATLAB?=
 
 # Build image segmentation example? (CImg needs to be installed)
-WITH_CIMG=
+WITH_CIMG?=

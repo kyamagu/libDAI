@@ -1,0 +1,8 @@
+Makefile.conf
+lib/*
+*~
+*.o
+*.dSYM
+.DS_Store
+alldai_test.aliases
+factorgraph_test.fg

@@ -35,7 +35,7 @@ TARGETS:=lib tests utils examples
 ifdef WITH_MATLAB
   TARGETS:=$(TARGETS) matlabs
 endif
-TARGETS:=$(TARGETS) unittests testregression testem
+#TARGETS:=$(TARGETS) unittests testregression testem
 ifdef WITH_DOC
   TARGETS:=$(TARGETS) doc
 endif
@@ -238,17 +238,17 @@ endif
 # MATLAB INTERFACE
 ###################
 
-matlab/dai$(ME) : $(SRC)/matlab/dai.cpp $(HEADERS) $(SOURCES) $(SRC)/matlab/matlab.cpp
-	$(MEX) -output $@ $< $(SRC)/matlab/matlab.cpp $(SOURCES)
+matlab/dai$(ME) : $(SRC)/matlab/dai.cpp $(HEADERS) $(SRC)/matlab/matlab.cpp $(LIB)/libdai$(LE)
+	$(MEX) -output $@ $< $(SRC)/matlab/matlab.cpp $(LIB)/libdai$(LE)
 
-matlab/dai_readfg$(ME) : $(SRC)/matlab/dai_readfg.cpp $(HEADERS) $(SRC)/matlab/matlab.cpp $(SRC)/factorgraph.cpp $(SRC)/exceptions.cpp $(SRC)/bipgraph.cpp $(SRC)/graph.cpp $(SRC)/factor.cpp $(SRC)/util.cpp
-	$(MEX) -output $@ $< $(SRC)/matlab/matlab.cpp $(SRC)/factorgraph.cpp $(SRC)/exceptions.cpp $(SRC)/bipgraph.cpp $(SRC)/graph.cpp $(SRC)/factor.cpp $(SRC)/util.cpp
+matlab/dai_readfg$(ME) : $(SRC)/matlab/dai_readfg.cpp $(HEADERS) $(SRC)/matlab/matlab.cpp $(LIB)/libdai$(LE)
+	$(MEX) -output $@ $< $(SRC)/matlab/matlab.cpp $(LIB)/libdai$(LE)
 
-matlab/dai_writefg$(ME) : $(SRC)/matlab/dai_writefg.cpp $(HEADERS) $(SRC)/matlab/matlab.cpp $(SRC)/factorgraph.cpp $(SRC)/exceptions.cpp $(SRC)/bipgraph.cpp $(SRC)/graph.cpp $(SRC)/factor.cpp $(SRC)/util.cpp
-	$(MEX) -output $@ $< $(SRC)/matlab/matlab.cpp $(SRC)/factorgraph.cpp $(SRC)/exceptions.cpp $(SRC)/bipgraph.cpp $(SRC)/graph.cpp $(SRC)/factor.cpp $(SRC)/util.cpp
+matlab/dai_writefg$(ME) : $(SRC)/matlab/dai_writefg.cpp $(HEADERS) $(SRC)/matlab/matlab.cpp $(LIB)/libdai$(LE)
+	$(MEX) -output $@ $< $(SRC)/matlab/matlab.cpp $(LIB)/libdai$(LE)
 
-matlab/dai_potstrength$(ME) : $(SRC)/matlab/dai_potstrength.cpp $(HEADERS) $(SRC)/matlab/matlab.cpp $(SRC)/exceptions.cpp
-	$(MEX) -output $@ $< $(SRC)/matlab/matlab.cpp $(SRC)/exceptions.cpp
+matlab/dai_potstrength$(ME) : $(SRC)/matlab/dai_potstrength.cpp $(HEADERS) $(SRC)/matlab/matlab.cpp $(LIB)/libdai$(LE)
+	$(MEX) -output $@ $< $(SRC)/matlab/matlab.cpp $(LIB)/libdai$(LE)
 
 
 # UTILS
@@ -318,7 +318,10 @@ TAGS :
 # CLEAN
 ########
 
-.PHONY : clean
+.PHONY : runtest clean
+
+runtest: unittests testregression testem
+
 ifneq ($(OS),WINDOWS)
 clean :
 	-rm $(OBJECTS)
