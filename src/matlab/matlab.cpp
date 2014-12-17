@@ -9,6 +9,31 @@
 #include <iostream>
 #include <dai/matlab/matlab.h>
 
+namespace {
+
+void getMemberAndP(const mxArray* psi, size_t ind,
+                   mxArray** mx_member, mxArray** mx_P) {
+    if( mxIsCell(psi) ) {
+        mxArray* cell = mxGetCell(psi, ind);
+        if( !mxIsStruct(cell) )
+            mexErrMsgTxt("invalid factor psi.");
+        *mx_member = mxGetField(cell, ind, "Member");
+        *mx_P = mxGetField(cell, ind, "P");
+    }
+    else if ( mxIsStruct(psi) ) {
+        *mx_member = mxGetField(psi, ind, "Member");
+        *mx_P = mxGetField(psi, ind, "P");
+    }
+    else
+        mexErrMsgTxt("invalid factor psi.");
+
+    if (!*mx_member || !*mx_P)
+        mexErrMsgTxt("could not find a 'Member' or 'P' field.");
+    if (!mxIsDouble(*mx_member) || !mxIsDouble(*mx_P))
+        mexErrMsgTxt("field 'Member' or 'P' is invalid.");
+}
+
+}
 
 namespace dai {
 
@@ -16,21 +41,20 @@ namespace dai {
 using namespace std;
 
 
-/* Convert vector<Factor> structure to a cell vector of CPTAB-like structs */
+/* Convert vector<Factor> structure to a struct array of CPTAB-like structs */
 mxArray *Factors2mx(const vector<Factor> &Ps) {
     size_t nr = Ps.size();
 
-    mxArray *psi = mxCreateCellMatrix(nr,1);
-
-    const char *fieldnames[2];
-    fieldnames[0] = "Member";
-    fieldnames[1] = "P";
+    const char *fieldnames[] = { "Member", "P" };
+    mxArray *psi = mxCreateStructMatrix(nr,1,2,fieldnames);
+    if( !psi )
+        mexErrMsgTxt("Memory error");
 
     size_t I_ind = 0;
     for( vector<Factor>::const_iterator I = Ps.begin(); I != Ps.end(); I++, I_ind++ ) {
-        mxArray *Bi = mxCreateStructMatrix(1,1,2,fieldnames);
-
         mxArray *BiMember = mxCreateDoubleMatrix(1,I->vars().size(),mxREAL);
+        if( !BiMember )
+            mexErrMsgTxt("Memory error");
         double *BiMember_data = mxGetPr(BiMember);
         size_t i = 0;
         vector<mwSize> dims;
@@ -42,42 +66,33 @@ mxArray *Factors2mx(const vector<Factor> &Ps) {
             dims.push_back( 1 );
 
         mxArray *BiP = mxCreateNumericArray(dims.size(), &(*(dims.begin())), mxDOUBLE_CLASS, mxREAL);
+        if( !BiP )
+            mexErrMsgTxt("Memory error");
         double *BiP_data = mxGetPr(BiP);
         for( size_t j = 0; j < I->nrStates(); j++ )
             BiP_data[j] = (*I)[j];
 
-        mxSetField(Bi,0,"Member",BiMember);
-        mxSetField(Bi,0,"P",BiP);
-
-        mxSetCell(psi, I_ind, Bi);
+        mxSetField(psi,I_ind,"Member",BiMember);
+        mxSetField(psi,I_ind,"P",BiP);
     }
     return( psi );
 }
 
-
-/* Convert cell vector of CPTAB-like structs to vector<Factor> */
+/* Convert struct array of CPTAB-like structs to vector<Factor> */
 vector<Factor> mx2Factors(const mxArray *psi, long verbose) {
     set<Var> vars;
     vector<Factor> factors;
+    size_t n = mxGetNumberOfElements(psi);
 
-    int n1 = mxGetM(psi);
-    int n2 = mxGetN(psi);
-    if( n2 != 1 && n1 != 1 )
-        mexErrMsgTxt("psi should be a Nx1 or 1xN cell matrix.");
-    size_t nr_f = n1;
-    if( n1 == 1 )
-        nr_f = n2;
-
-    // interpret psi, linear cell array of cptabs
-    for( size_t cellind = 0; cellind < nr_f; cellind++ ) {
+    for( size_t cellind = 0; cellind < n; cellind++ ) {
         if( verbose >= 3 )
             cerr << "reading factor " << cellind << ": " << endl;
-        mxArray *cell = mxGetCell(psi, cellind);
-        mxArray *mx_member = mxGetField(cell, 0, "Member");
-        size_t nr_mem = mxGetN(mx_member);
+        mxArray *mx_member, *mx_P;
+        getMemberAndP(psi, cellind, &mx_member, &mx_P);
+        size_t nr_mem = mxGetNumberOfElements(mx_member);
         double *members = mxGetPr(mx_member);
-        const mwSize *dims = mxGetDimensions(mxGetField(cell,0,"P"));
-        double *factordata = mxGetPr(mxGetField(cell, 0, "P"));
+        const mwSize *dims = mxGetDimensions(mx_P);
+        double *factordata = mxGetPr(mx_P);
 
         // add variables
         VarSet factorvars;
@@ -129,14 +144,17 @@ vector<Factor> mx2Factors(const mxArray *psi, long verbose) {
     return( factors );
 }
 
-
 /* Convert CPTAB-like struct to Factor */
 Factor mx2Factor(const mxArray *psi) {
-    mxArray *mx_member = mxGetField(psi, 0, "Member");
+    if( mxGetNumberOfDimensions(psi)!=1 )
+        mexErrMsgTxt("invalid factor psi.");
+
+    mxArray *mx_member, *mx_P;
+    getMemberAndP(psi, 0, &mx_member, &mx_P);
     size_t nr_mem = mxGetN(mx_member);
     double *members = mxGetPr(mx_member);
-    const mwSize *dims = mxGetDimensions(mxGetField(psi,0,"P"));
-    double *factordata = mxGetPr(mxGetField(psi, 0, "P"));
+    const mwSize *dims = mxGetDimensions(mx_P);
+    double *factordata = mxGetPr(mx_P);
 
     // add variables
     VarSet vars;
