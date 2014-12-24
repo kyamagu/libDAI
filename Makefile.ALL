@@ -18,18 +18,19 @@
 # COMPILATION AND BUILD FLAGS
 
 # Enable/disable various approximate inference methods
-WITH_BP?=true
-WITH_FBP?=true
-WITH_TRWBP?=true
-WITH_MF?=true
-WITH_HAK?=true
-WITH_LC?=true
-WITH_TREEEP?=true
-WITH_JTREE?=true
-WITH_MR?=true
-WITH_GIBBS?=true
-WITH_CBP?=true
-WITH_DECMAP?=true
+WITH_BP=true
+WITH_FBP=true
+WITH_TRWBP=true
+WITH_MF=true
+WITH_HAK=true
+WITH_LC=true
+WITH_TREEEP=true
+WITH_JTREE=true
+WITH_MR=true
+WITH_GIBBS=true
+WITH_CBP=true
+WITH_DECMAP=true
+WITH_GLC=true
 
 # Build with debug info? (slower but safer)
 DEBUG?=true
